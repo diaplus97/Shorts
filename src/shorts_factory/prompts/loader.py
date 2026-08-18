@@ -15,7 +15,17 @@ from ..errors import ConfigError
 from ..utils import sha256_text
 from .renderer import render
 
-DEFAULT_PROMPT_DIR = Path(__file__).resolve().parents[3] / "prompts"
+
+def _default_prompt_dir() -> Path:
+    """Mirror the config lookup: package-relative first, then the cwd."""
+    candidates = [Path(__file__).resolve().parents[3] / "prompts", Path.cwd() / "prompts"]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[0]
+
+
+DEFAULT_PROMPT_DIR = _default_prompt_dir()
 
 #: Bumped by hand whenever a prompt's contract changes in a breaking way.
 PROMPT_VERSIONS: dict[str, str] = {

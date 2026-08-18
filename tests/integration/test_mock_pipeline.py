@@ -12,7 +12,7 @@ import pytest
 
 from shorts_factory.domain import AssetStatus, AssetType, PipelineState, Stage, StageStatus
 from shorts_factory.errors import FactCheckError, PipelineValidationError
-from shorts_factory.media import is_available, probe
+from shorts_factory.media import probe
 from shorts_factory.pipeline import (
     load_assets,
     load_research,
@@ -26,7 +26,7 @@ from shorts_factory.pipeline import (
 )
 from shorts_factory.providers.video.mock import MockVideoProvider
 
-requires_media = pytest.mark.skipif(not is_available(), reason="ffmpeg/ffprobe not installed")
+requires_media = pytest.mark.media
 
 
 async def run_through_direct(context) -> None:

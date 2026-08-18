@@ -18,7 +18,22 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .errors import ConfigError
 
-DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+
+def _default_dir(name: str) -> Path:
+    """Locate ``config/`` or ``prompts/``.
+
+    An editable install finds them next to the package. A wheel install does
+    not, so fall back to the working directory before giving up; ``doctor``
+    prints whichever one was used, and SHORTS_CONFIG_DIR overrides both.
+    """
+    candidates = [Path(__file__).resolve().parents[2] / name, Path.cwd() / name]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[0]
+
+
+DEFAULT_CONFIG_DIR = _default_dir("config")
 
 
 class ProviderSelection(BaseModel):

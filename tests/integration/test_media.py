@@ -9,7 +9,6 @@ import pytest
 from shorts_factory.errors import MediaError
 from shorts_factory.media import (
     compose,
-    is_available,
     normalize_image,
     normalize_video,
     probe,
@@ -18,7 +17,7 @@ from shorts_factory.media import (
 from shorts_factory.media.compose import build_audio_filter, build_video_filter
 from shorts_factory.media.ffmpeg import run_async
 
-pytestmark = pytest.mark.skipif(not is_available(), reason="ffmpeg/ffprobe not installed")
+pytestmark = pytest.mark.media
 
 
 async def make_clip(path: Path, duration: float, size: str = "640x360") -> Path:

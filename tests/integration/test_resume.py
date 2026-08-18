@@ -9,7 +9,6 @@ import pytest
 
 from shorts_factory.domain import PipelineState, Stage, StageStatus
 from shorts_factory.errors import PipelineValidationError
-from shorts_factory.media import is_available
 from shorts_factory.pipeline import (
     build_context,
     load_existing,
@@ -18,7 +17,7 @@ from shorts_factory.pipeline import (
 )
 from shorts_factory.providers import build_providers
 
-requires_media = pytest.mark.skipif(not is_available(), reason="ffmpeg/ffprobe not installed")
+requires_media = pytest.mark.media
 
 
 def reopen(config, slug):

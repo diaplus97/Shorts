@@ -26,6 +26,22 @@ def pytest_configure(config: pytest.Config) -> None:
     configure_logging("WARNING", force=True)
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Skip ffmpeg-dependent tests when ffmpeg is not installed.
+
+    Tests only declare `@pytest.mark.media`; whether it can run is decided here,
+    so `pytest -m "not media"` also works on a machine that does have ffmpeg.
+    """
+    from shorts_factory.media import is_available
+
+    if is_available():
+        return
+    skip = pytest.mark.skip(reason="ffmpeg/ffprobe not installed")
+    for item in items:
+        if item.get_closest_marker("media"):
+            item.add_marker(skip)
+
+
 @pytest.fixture(autouse=True)
 def _block_live_api(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
     if request.node.get_closest_marker("live"):
