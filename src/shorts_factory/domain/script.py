@@ -20,6 +20,8 @@ class ScriptBeat(BaseModel):
     visualizable: bool = False
     #: What the viewer sees while this sentence is spoken.
     visual_payoff: str | None = None
+    #: One word or short phrase to stress, highlighted in the burned-in caption.
+    emphasis: str | None = None
 
 
 class ScriptResult(BaseModel):

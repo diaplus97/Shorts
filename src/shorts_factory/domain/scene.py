@@ -94,6 +94,8 @@ class Scene(BaseModel):
 
     transition_in: str | None = None
     transition_out: str | None = None
+    #: Name from `config/sfx.yaml` vocabulary, or None for a silent scene.
+    sfx_cue: str | None = None
 
     negative_constraints: list[str] = Field(default_factory=list)
 

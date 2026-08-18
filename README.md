@@ -109,6 +109,17 @@ grammar in `config/content_types.yaml`:
 - **One narrator.** The channel voice lives in `config/voice.yaml`. Checks catch
   mechanical `~합니다` runs and flat rhythm.
 
+## Sound and captions
+
+- **Scene sound effects.** The director picks a cue per scene from the short
+  vocabulary in `config/sfx.yaml`; composition places it at that scene's start
+  under the voice. No audio ships here — you supply the files, and a cue with no
+  file behind it is a warning, not a failed render. Off by default.
+- **One highlighted word.** The writer may mark one word per beat; it is
+  coloured in the burned-in caption only. The SRT deliverable stays plain text.
+- **Background music** is optional: `shorts render --bgm track.wav` ducks it
+  against the narration.
+
 ## What keeps the output publishable
 
 - **Mock is never final.** Any mock provider means `mock_preview.mp4` with a

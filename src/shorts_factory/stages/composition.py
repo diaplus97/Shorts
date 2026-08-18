@@ -18,7 +18,7 @@ from pathlib import Path
 
 from ..domain import AssetLedger, AssetType, Manifest, PipelineState, ScenePlan
 from ..errors import MediaError, PipelineValidationError
-from ..media import compose, normalize_image, normalize_video, probe
+from ..media import SfxPlacement, compose, normalize_image, normalize_video, probe
 from ..pipeline.checkpoint import load_assets, require_manifest, require_scenes, save_project
 from ..pipeline.context import RunContext
 from ..quality import QAReport, assess, check_clip, check_final_video
@@ -107,6 +107,48 @@ def publish(context: RunContext, staged: Path, destination: Path) -> Path:
     return destination
 
 
+def resolve_sfx(context: RunContext, plan: ScenePlan, manifest: Manifest) -> list[SfxPlacement]:
+    """Turn each scene's cue into a placed sound, skipping what is not installed.
+
+    No audio ships with this repository, so a cue with no file behind it is a
+    warning rather than a failed render.
+    """
+    config = context.config.sfx
+    if not config.enabled:
+        return []
+
+    starts = {entry.scene_id: entry.start for entry in manifest.scenes}
+    placements: list[SfxPlacement] = []
+    missing: set[str] = set()
+
+    for scene in plan.scenes:
+        entry = config.entry_for(scene.sfx_cue)
+        if entry is None:
+            if scene.sfx_cue and scene.sfx_cue != "none":
+                missing.add(scene.sfx_cue)
+            continue
+        path = Path(entry.file)
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        if not path.exists():
+            missing.add(f"{scene.sfx_cue} ({entry.file})")
+            continue
+        placements.append(
+            SfxPlacement(
+                path=str(path),
+                start_sec=starts.get(scene.id, 0.0),
+                gain_db=config.gain_for(entry),
+                cue=scene.sfx_cue,
+            )
+        )
+
+    if missing:
+        context.log.warning("sfx_cue_unavailable", cues=sorted(missing))
+    if placements:
+        context.log.info("sfx_placed", count=len(placements))
+    return placements
+
+
 def plan(context: RunContext) -> StagePlan:
     notes = ["local ffmpeg work only, no paid calls"]
     if not context.production_ready:
@@ -135,6 +177,7 @@ async def run(context: RunContext) -> Path:
     subtitle_ref = manifest.subtitle_burn or manifest.subtitle
     subtitle = context.workspace.root / subtitle_ref if subtitle_ref else None
 
+    sfx = resolve_sfx(context, scene_plan, manifest)
     staged = context.workspace.work_dir / "render.mp4"
     await compose(
         clips=clips,
@@ -148,6 +191,7 @@ async def run(context: RunContext) -> Path:
         bgm_path=context.bgm_path,
         subtitle_path=subtitle if subtitle and subtitle.exists() else None,
         watermark=None if production else MOCK_WATERMARK,
+        sfx=sfx,
     )
 
     readiness = assess(

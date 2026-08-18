@@ -43,6 +43,10 @@ design document is `docs/IMPLEMENTATION_SPEC.md`.
 - Speech planning is a deterministic stage, not an LLM call and not an agent.
 - Provider-specific TTS syntax never enters the domain model. It lives in the
   TTS adapter.
+- No audio or media assets are committed. A configured sound effect with no file
+  behind it warns and is skipped; it never fails a render.
+- Do not leave a schema field that nothing reads or writes. Either wire it up or
+  delete it.
 - Do not expand the scope without an explicit requirement.
 
 ## Layout

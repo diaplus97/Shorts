@@ -1,11 +1,13 @@
 """Final FFmpeg composition (spec section 41).
 
-normalize scenes -> concat -> voiceover -> bgm ducking -> subtitle -> encode
+normalize scenes -> concat -> voiceover -> bgm ducking -> sfx -> subtitle -> encode
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 from ..config import AudioSettings, OutputSettings, SubtitleSettings
 from ..errors import MediaError
@@ -24,30 +26,65 @@ def write_concat_list(clips: list[Path], path: str | Path) -> Path:
     return atomic_write_text(path, "\n".join(lines) + "\n")
 
 
+class SfxPlacement(BaseModel):
+    """One sound effect, dropped in at a scene boundary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    start_sec: float = 0.0
+    gain_db: float = -16.0
+    cue: str | None = None
+
+
 def build_audio_filter(
     *,
     voice_index: int,
     bgm_index: int | None,
+    sfx_indexes: list[tuple[int, SfxPlacement]] | None = None,
     audio: AudioSettings,
     sample_rate: int,
 ) -> str:
-    voice_chain = (
-        f"[{voice_index}:a]aresample={sample_rate},aformat=channel_layouts=stereo,"
-        f"volume={audio.voice_gain_db}dB"
-    )
-    if bgm_index is None:
-        return f"{voice_chain},alimiter=limit=0.95,apad[a]"
+    """Voice, optionally ducked music, and any scene sound effects.
 
-    # Duck the music against the voice, then mix the ducked music back in.
-    return (
-        f"{voice_chain},asplit=2[vo_mix][vo_key];"
-        f"[{bgm_index}:a]aresample={sample_rate},aformat=channel_layouts=stereo,"
-        f"volume={audio.bgm_gain_db}dB[bgm];"
-        f"[bgm][vo_key]sidechaincompress=threshold={audio.duck_threshold}:"
-        f"ratio={audio.duck_ratio}:attack=20:release=300[bgm_ducked];"
-        f"[bgm_ducked][vo_mix]amix=inputs=2:duration=longest:dropout_transition=0,"
-        f"alimiter=limit=0.95,apad[a]"
+    ``amix`` is told ``normalize=0`` so adding a quiet effect does not pull the
+    narration down with it; the limiter afterwards catches any peak.
+    """
+    common = f"aresample={sample_rate},aformat=channel_layouts=stereo"
+    chains: list[str] = []
+    mix_labels: list[str] = []
+
+    voice_chain = f"[{voice_index}:a]{common},volume={audio.voice_gain_db}dB"
+    if bgm_index is None:
+        chains.append(f"{voice_chain}[voice]")
+        mix_labels.append("[voice]")
+    else:
+        # Duck the music against the voice, then mix the ducked music back in.
+        chains.append(f"{voice_chain},asplit=2[voice][vo_key]")
+        chains.append(f"[{bgm_index}:a]{common},volume={audio.bgm_gain_db}dB[bgm]")
+        chains.append(
+            f"[bgm][vo_key]sidechaincompress=threshold={audio.duck_threshold}:"
+            f"ratio={audio.duck_ratio}:attack=20:release=300[bgm_ducked]"
+        )
+        mix_labels.extend(["[voice]", "[bgm_ducked]"])
+
+    for index, placement in sfx_indexes or []:
+        label = f"sfx{index}"
+        delay_ms = max(round(placement.start_sec * 1000), 0)
+        chain = f"[{index}:a]{common},volume={placement.gain_db}dB"
+        if delay_ms:
+            chain += f",adelay={delay_ms}:all=1"
+        chains.append(f"{chain}[{label}]")
+        mix_labels.append(f"[{label}]")
+
+    tail = "alimiter=limit=0.95,apad[a]"
+    if len(mix_labels) == 1:
+        return f"{';'.join(chains)};{mix_labels[0]}{tail}"
+    mix = (
+        f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=longest"
+        ":dropout_transition=0:normalize=0,"
     )
+    return f"{';'.join(chains)};{mix}{tail}"
 
 
 def build_watermark_filter(text: str, font_name: str) -> str:
@@ -98,6 +135,7 @@ async def compose(
     bgm_path: str | Path | None = None,
     subtitle_path: str | Path | None = None,
     watermark: str | None = None,
+    sfx: list[SfxPlacement] | None = None,
 ) -> Path:
     """Stitch normalised clips, audio and subtitles into the final MP4."""
     target = Path(destination)
@@ -125,9 +163,17 @@ async def compose(
     voice_index = 1
 
     bgm_index: int | None = None
+    next_index = 2
     if bgm_path is not None:
         args += ["-i", str(bgm_path)]
-        bgm_index = 2
+        bgm_index = next_index
+        next_index += 1
+
+    sfx_indexes: list[tuple[int, SfxPlacement]] = []
+    for placement in sfx or []:
+        args += ["-i", placement.path]
+        sfx_indexes.append((next_index, placement))
+        next_index += 1
 
     filter_complex = ";".join(
         [
@@ -140,6 +186,7 @@ async def compose(
             build_audio_filter(
                 voice_index=voice_index,
                 bgm_index=bgm_index,
+                sfx_indexes=sfx_indexes,
                 audio=audio,
                 sample_rate=output.audio_sample_rate,
             ),

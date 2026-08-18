@@ -43,7 +43,6 @@ class SpeechUnit(BaseModel):
     referenced_claim_ids: list[str] = Field(default_factory=list)
     #: The script beat this unit was split out of.
     beat_id: str | None = None
-    preferred_scene_id: str | None = None
 
     @field_validator("text")
     @classmethod

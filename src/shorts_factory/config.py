@@ -149,6 +149,8 @@ class SubtitleSettings(BaseModel):
     font_name: str = "Noto Sans CJK KR"
     outline: int = 4
     shadow: int = 1
+    #: ASS colour (&HBBGGRR) used for the one stressed word in a cue.
+    emphasis_colour: str = "&H0055D7FF"
     burn_in: bool = True
 
 
@@ -342,6 +344,32 @@ class VoiceConfig(BaseModel):
     speech: SpeechContract = Field(default_factory=SpeechContract)
 
 
+class SfxEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file: str
+    gain_db: float | None = None
+
+
+class SfxConfig(BaseModel):
+    """Scene sound effects. Empty and disabled until the user supplies files."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    default_gain_db: float = -16.0
+    vocabulary: list[str] = Field(default_factory=list)
+    library: dict[str, SfxEntry] = Field(default_factory=dict)
+
+    def entry_for(self, cue: str | None) -> SfxEntry | None:
+        if not cue or cue == "none":
+            return None
+        return self.library.get(cue)
+
+    def gain_for(self, entry: SfxEntry) -> float:
+        return entry.gain_db if entry.gain_db is not None else self.default_gain_db
+
+
 class ContentTypeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -410,6 +438,7 @@ class AppConfig(BaseModel):
     visual_styles: VisualStyles
     content_contract: ContentContract
     voice: VoiceConfig
+    sfx: SfxConfig
 
     def content_type(self, name: str) -> ContentTypeConfig:
         try:
@@ -451,6 +480,7 @@ def load_config(config_dir: str | Path | None = None, *, load_env: bool = True) 
             _load_yaml(directory / "content_contract.yaml")
         )
         voice = VoiceConfig.model_validate(_load_yaml(directory / "voice.yaml"))
+        sfx = SfxConfig.model_validate(_load_yaml(directory / "sfx.yaml"))
     except ConfigError:
         raise
     except Exception as exc:  # pydantic ValidationError and friends
@@ -464,6 +494,7 @@ def load_config(config_dir: str | Path | None = None, *, load_env: bool = True) 
         visual_styles=visual_styles,
         content_contract=content_contract,
         voice=voice,
+        sfx=sfx,
     )
 
 

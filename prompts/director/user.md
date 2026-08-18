@@ -46,6 +46,14 @@ SCRIPT_JSON:
 {{script_json}}
 ```
 
+Sound cues you may assign to a scene with `sfx_cue`. Use `none` for most
+scenes: a Short with a sound on every cut is noise.
+
+SFX_VOCABULARY_JSON:
+```json
+{{sfx_vocabulary_json}}
+```
+
 The speech units to cover. Each scene takes whole units, in order, and every
 unit must be used exactly once:
 
@@ -73,7 +81,7 @@ Produce a `ScenePlan` object:
   `visual_subject`, `environment`, `action`, `camera_path`, `framing`,
   `lighting`, `reality_type`, `priority`, `asset_type`, `speech_unit_ids`,
   `continuity_ids`, `claim_ids`, `transition_in`, `transition_out`,
-  `negative_constraints`.
+  `sfx_cue`, `negative_constraints`.
 - `visual_notes`: anything the compositor should know.
 
 Return the JSON object only.

@@ -48,6 +48,7 @@ def build(
                 end=round(entry.end + entry.gap_after, 3),
                 text=wrap_cue(unit.text, settings.max_chars_per_line, settings.max_lines),
                 position=position_by_unit.get(unit.id, "bottom"),
+                emphasis=unit.emphasis_words[0] if unit.emphasis_words else None,
             )
         )
     return cues

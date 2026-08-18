@@ -1,0 +1,31 @@
+# Scene sound effects (spec v0.4 section E.1).
+#
+# For this format a few small, well-placed sounds do more than background music.
+# No audio ships with this repository: you supply the files and map them here.
+#
+# `vocabulary` is what the director may choose from — deliberately short,
+# because a 55-second Short with twelve different sounds is noise. `library`
+# maps those names to files on disk; a cue with no file is skipped with a
+# warning rather than failing the render.
+
+enabled: false
+
+# Applied when a library entry does not override it. SFX sit well under the
+# voice; this is not background music.
+default_gain_db: -16.0
+
+vocabulary:
+  - none
+  - approach_whoosh
+  - mechanical_reveal
+  - transport_roller
+  - sensor_scan
+  - reject_click
+  - stack_clunk
+
+library: {}
+#  approach_whoosh:
+#    file: assets/sfx/whoosh.wav
+#    gain_db: -14.0
+#  mechanical_reveal:
+#    file: assets/sfx/reveal.wav

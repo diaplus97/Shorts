@@ -43,6 +43,8 @@ class SubtitleCue(BaseModel):
     text: str
     #: Moves the cue off important action (spec v0.2 section 40).
     position: Position = "bottom"
+    #: At most one word is stressed. Two highlights in one cue is no highlight.
+    emphasis: str | None = None
 
     @property
     def duration(self) -> float:
@@ -181,11 +183,21 @@ def render_ass(cues: list[SubtitleCue], settings: SubtitleSettings, width: int, 
         (
             f"Dialogue: 0,{format_ass_timestamp(cue.start)},{format_ass_timestamp(cue.end)},"
             f"{'Top' if cue.position == 'top' else 'Default'},,0,0,0,,"
-            f"{cue.text.replace(chr(10), chr(92) + 'N')}"
+            f"{_ass_text(cue, settings)}"
         )
         for cue in cues
     ]
     return header + "\n" + "\n".join(events) + "\n"
+
+
+def _ass_text(cue: SubtitleCue, settings: SubtitleSettings) -> str:
+    """Cue text with the stressed word coloured, line breaks escaped for ASS."""
+    text = cue.text
+    word = (cue.emphasis or "").strip()
+    if word and word in text:
+        highlighted = f"{{\\c{settings.emphasis_colour}}}{word}{{\\r}}"
+        text = text.replace(word, highlighted, 1)
+    return text.replace("\n", "\\N")
 
 
 def _style_line(name: str, alignment: int, settings: SubtitleSettings) -> str:

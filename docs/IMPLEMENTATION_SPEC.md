@@ -4,11 +4,12 @@
 > **문서 목적:** AI를 이용해 “평소에는 볼 수 없는 시스템·사물 내부·행동 뒤의 과정”을 시각화하는 YouTube Shorts 제작 파이프라인의 구현 기준서  
 > **대상 개발 도구:** OpenAI Codex / Claude Code  
 > **권장 구현 언어:** Python 3.12  
-> **문서 상태:** MVP Implementation Spec v0.3  
+> **문서 상태:** MVP Implementation Spec v0.4  
 > **기준일:** 2026-08-18
 
 > **v0.2 개정 (Mock/Production 분리, Content Quality Contract):** 부록 C 참조.  
 > **v0.3 개정 (Spoken Narration & Scene-Speech Sync):** 부록 D 참조.  
+> **v0.4 개정 (SFX와 자막 강조):** 부록 E 참조.  
 > 본문과 부록이 충돌하면 **부록이 우선**한다.
 
 ---
@@ -3356,3 +3357,43 @@ energy: moderate
 
 `~합니다/~됩니다`가 기본이되 전부 같은 어미로 끝내지 않는다. 전환·부연에 `~죠`,
 `~는데요`, 질문에 `~까요?`를 **기능에 따라** 쓴다.
+
+
+---
+
+# 부록 E — v0.4 개정 (남은 P1: 소리 설계와 자막 강조)
+
+실제 Video Provider를 붙이기 전에 남아 있던 P1을 정리한다.
+
+## E.1 Scene SFX
+
+BGM보다 Scene에 맞는 작은 효과음이 이 포맷에서는 더 중요하다.
+
+```text
+Scene.sfx_cue → config/sfx.yaml library → 파일 → manifest의 scene start에 배치
+```
+
+- `config/sfx.yaml`의 `vocabulary`가 Director가 고를 수 있는 이름의 전부다.
+  짧게 유지한다. 55초 안에 열두 가지 소리가 나면 그건 소음이다.
+- `library`는 그 이름을 로컬 파일에 연결한다. **저장소에 오디오를 포함하지
+  않는다.** 파일이 없는 cue는 경고 후 건너뛴다. 렌더를 실패시키지 않는다.
+- 기본값은 `enabled: false`다. 사용자가 소리를 넣기 전까지 동작이 바뀌지 않는다.
+- 믹싱은 `amix ... normalize=0`이다. 조용한 효과음 하나가 내레이션 레벨을 같이
+  끌어내리지 않게 한다. 뒤의 limiter가 피크를 잡는다.
+- BGM ducking과 공존한다: 음악은 목소리에 sidechain으로 눌리고, SFX는 그 위에
+  얹힌다.
+
+## E.2 자막 핵심 단어 강조
+
+- Writer가 beat당 `emphasis` 한 단어를 선택할 수 있다(선택 사항).
+- Speech Planner가 그 단어를 **실제로 포함한 unit**에만 전달한다.
+- 굽는 ASS에서만 색을 입힌다. cue당 하나뿐이다. 두 개면 강조가 아니다.
+- 납품물인 SRT는 평문을 유지한다. SRT 스타일링은 플레이어마다 다르다.
+- 색은 `config/settings.yaml`의 `subtitles.emphasis_colour`(ASS는 `&HBBGGRR`).
+
+## E.3 제거한 필드
+
+`SpeechUnit.preferred_scene_id`를 제거했다. 현재 스테이지 순서에서는 SpeechPlan이
+Scene보다 먼저 만들어지므로 이 필드를 채울 수 있는 코드가 존재하지 않는다.
+항상 null인 필드는 읽는 사람을 오도한다. Scene이 `speech_unit_ids`로 unit을
+가져가는 방향만 남긴다.

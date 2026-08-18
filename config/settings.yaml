@@ -90,6 +90,8 @@ subtitles:
   font_size: 64
   outline: 4
   shadow: 1
+  # ASS colour is &HBBGGRR, not RGB. This is a warm amber.
+  emphasis_colour: "&H0055D7FF"
   # Must be a font installed on this machine that can render Korean.
   font_name: "Noto Sans CJK KR"
   burn_in: true

@@ -151,6 +151,7 @@ def units_from_beat(
         for offset, breath in enumerate(breaths):
             texts.append((breath, offset == len(breaths) - 1))
 
+    emphasis = (beat.emphasis or "").strip()
     units: list[SpeechUnit] = []
     for offset, (text, ends_sentence) in enumerate(texts):
         ends_beat = offset == len(texts) - 1
@@ -158,6 +159,8 @@ def units_from_beat(
             SpeechUnit(
                 id=f"U{start_index + offset:02d}",
                 text=text,
+                # The stressed word belongs to whichever breath actually says it.
+                emphasis_words=[emphasis] if emphasis and emphasis in text else [],
                 pause_after_ms=_pause_after(
                     text,
                     delivery,

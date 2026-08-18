@@ -7,7 +7,7 @@ from .audio import (
     concat_with_gaps,
     render_silence,
 )
-from .compose import compose, write_concat_list
+from .compose import SfxPlacement, compose, write_concat_list
 from .ffmpeg import ffmpeg_path, ffprobe_path, has_filter, is_available, run, run_async, version
 from .ffprobe import MediaInfo, probe
 from .normalize import normalize_image, normalize_video
@@ -26,6 +26,7 @@ from .subtitles import (
 __all__ = [
     "AudioAnalysis",
     "MediaInfo",
+    "SfxPlacement",
     "SubtitleCue",
     "SubtitleSegment",
     "analyze_audio",

@@ -53,7 +53,9 @@ Produce a `ScriptResult` object:
   must pose a question and fit inside HOOK_MAX_SECONDS.
 - `narration`: the full narration, beats joined by single spaces.
 - `beats`: ids `B01`, `B02`, ..., each with `purpose`, `text`, `claim_ids`,
-  `visualizable` and `visual_payoff`.
+  `visualizable`, `visual_payoff`, and optionally `emphasis`: one word from
+  `text` to highlight on screen. Use it on the two or three beats that carry the
+  point, not on every one.
 - `target_duration_sec`: your estimate, MIN_DURATION_SEC..MAX_DURATION_SEC.
 - `resolved_question`: echo RESOLVED_QUESTION verbatim.
 - `referenced_claim_ids`: every claim id used anywhere in the script.

@@ -37,6 +37,10 @@ class Step:
     #: Korean narration line, spoken register. This is what the writer says;
     #: `statement` stays in written register for the research claim.
     spoken: str = ""
+    #: One word in `spoken` to stress on screen. Empty means no highlight.
+    emphasis: str = ""
+    #: Name from the config SFX vocabulary. "none" leaves the scene silent.
+    sfx_cue: str = "none"
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,7 @@ ATM = Scenario(
     reveal=Step(
         statement="입금구 안쪽에는 지폐를 한 장씩 떼어내는 롤러와 이송로가 이어져 있다.",
         spoken="지폐를 넣으면 안에서는 바로 확인이 시작됩니다. 그런데 뭉치 그대로는 셀 수 없죠.",
+        sfx_cue="mechanical_reveal",
         visual_payoff="ATM 외장이 단면으로 열리고 입금구부터 이어진 이송로가 드러난다",
         caption="입금구 안쪽이 열린다",
         key_object="ATM deposit slot and the transport path behind it",
@@ -108,6 +113,8 @@ ATM = Scenario(
                 "그래서 가장 먼저 하는 일이 한 장씩 나누는 겁니다. "
                 "고무 롤러가 맨 앞 지폐만 살짝 끌어당깁니다."
             ),
+            emphasis="한 장씩",
+            sfx_cue="transport_roller",
             visual_payoff="지폐 뭉치 앞면에서 고무 롤러가 돌며 맨 앞 지폐 한 장만 밀려 나간다",
             caption="롤러가 한 장씩 떼어낸다",
             key_object="a single banknote at the front of the stack",
@@ -121,6 +128,7 @@ ATM = Scenario(
         Step(
             statement="떨어져 나온 지폐는 좁은 이송로를 따라 벨트와 롤러 사이에 물려 이동한다.",
             spoken="떨어져 나온 한 장은 벨트에 물려 안쪽으로 들어가는데요.",
+            sfx_cue="transport_roller",
             visual_payoff="한 장이 된 지폐가 벨트 사이에 물려 좁은 통로를 따라 미끄러진다",
             caption="벨트가 지폐를 실어 나른다",
             key_object="the separated banknote",
@@ -134,6 +142,8 @@ ATM = Scenario(
         Step(
             statement="이송로의 광학 센서는 지폐가 지나가는 동안 무늬와 크기를 읽는다.",
             spoken="이동하는 동안 센서 앞을 지나갑니다. 여기서 무늬와 크기를 읽습니다.",
+            emphasis="무늬와 크기",
+            sfx_cue="sensor_scan",
             visual_payoff="지폐가 센서 구멍을 지나며 표면이 위아래에서 훑린다",
             caption="센서가 무늬를 읽는다",
             key_object="the banknote passing the optical sensor window",
@@ -147,6 +157,8 @@ ATM = Scenario(
         Step(
             statement="두께를 재는 센서는 두 장이 겹쳐 들어왔는지 함께 확인한다.",
             spoken="두께를 재는 곳도 있습니다. 두 장이 겹쳐 들어왔는지 확인하는 곳이죠.",
+            emphasis="겹쳐",
+            sfx_cue="sensor_scan",
             visual_payoff="지폐가 두 개의 작은 바퀴 사이를 지나며 눌리고, 겹친 지폐가 걸린다",
             caption="겹친 지폐를 잡아낸다",
             key_object="the thickness-sensing wheels",
@@ -159,6 +171,7 @@ ATM = Scenario(
         Step(
             statement="읽히지 않거나 겹쳐 들어온 지폐는 갈림길에서 되돌림 상자로 빠진다.",
             spoken="그럼 문제가 있는 지폐는 어떻게 될까요? 갈림길에서 따로 빠져나갑니다.",
+            sfx_cue="reject_click",
             visual_payoff="이송로 갈림길에서 판이 젖혀지고 지폐 한 장이 옆 통로로 빠진다",
             caption="걸러진 지폐는 옆길로",
             key_object="the diverter gate at the fork in the path",
@@ -171,6 +184,7 @@ ATM = Scenario(
         Step(
             statement="확인을 마친 지폐는 금액별로 나뉜 카세트에 차곡차곡 쌓인다.",
             spoken="확인을 마친 지폐만 금액별 카세트에 쌓입니다.",
+            sfx_cue="stack_clunk",
             visual_payoff="지폐가 카세트 안으로 들어가 기존 지폐 위에 눌려 쌓인다",
             caption="카세트에 쌓인다",
             key_object="the accepted banknote entering a cassette",
@@ -198,6 +212,7 @@ ATM = Scenario(
     surprise=Step(
         statement="한 장이라도 확인에 실패하면 그 지폐만 따로 빠지고 나머지는 그대로 진행된다.",
         spoken="한 장이 빠져도 뒤따르던 지폐는 멈추지 않는데요.",
+        emphasis="멈추지 않는데요",
         visual_payoff="한 장이 옆으로 빠지는 동안 뒤따르던 지폐들은 멈추지 않고 계속 간다",
         caption="한 장만 빠진다",
         key_object="one rejected note among a moving line of notes",
@@ -372,6 +387,7 @@ def generic_scenario(topic: str, subject: str) -> Scenario:
         reveal=Step(
             statement="겉면이 열리면 안쪽으로 이어진 통로가 드러난다.",
             spoken="겉에서는 아무것도 보이지 않습니다. 안쪽에는 통로가 이어져 있죠.",
+            sfx_cue="mechanical_reveal",
             visual_payoff="겉면이 단면으로 열리고 안쪽 통로가 보인다",
             caption="안쪽이 열린다",
             key_object=f"{subject} outer casing opening into a cutaway",

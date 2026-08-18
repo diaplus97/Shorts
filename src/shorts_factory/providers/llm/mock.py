@@ -230,6 +230,7 @@ class MockLLMProvider:
                     or ([machine_id] if machine_id else []),
                     "speech_unit_ids": units_by_beat.get(beat.get("id", ""), []),
                     "claim_ids": list(beat.get("claim_ids", [])),
+                    "sfx_cue": shot.sfx_cue,
                     "transition_in": "cut" if index == 0 else "match cut",
                     "transition_out": "match cut",
                     "negative_constraints": list(_SCENE_NEGATIVES),
@@ -315,6 +316,7 @@ def _beat(
         "claim_ids": [claim_id] if claim_id else [],
         "visualizable": True,
         "visual_payoff": step.visual_payoff if step else "카메라가 대상 앞으로 빠르게 다가간다",
+        "emphasis": (step.emphasis or None) if step else None,
     }
 
 

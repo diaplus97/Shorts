@@ -165,6 +165,7 @@ async def run(context: RunContext) -> ScenePlan:
             "preferred_camera_json": content_type.preferred_camera,
             "preferred_visuals_json": content_type.preferred_visuals,
             "transitions_json": context.config.visual_styles.style.transitions,
+            "sfx_vocabulary_json": context.config.sfx.vocabulary,
             "max_caption_chars": (
                 settings.subtitles.max_chars_per_line * settings.subtitles.max_lines
             ),
