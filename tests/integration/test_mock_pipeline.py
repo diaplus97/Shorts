@@ -30,7 +30,7 @@ requires_media = pytest.mark.media
 
 
 async def run_through_direct(context) -> None:
-    for stage in (Stage.RESEARCH, Stage.WRITE, Stage.FACT_LOCK, Stage.DIRECT):
+    for stage in (Stage.RESEARCH, Stage.WRITE, Stage.FACT_LOCK, Stage.SPEAK, Stage.DIRECT):
         await run_stage(context, stage)
 
 
@@ -47,7 +47,10 @@ async def test_research_to_scenes_with_mocks(context) -> None:
 
     script = load_script(workspace)
     assert script is not None
-    assert script.narration.startswith(context.project.topic.rstrip("?"))
+    # The hook is a rewritten spoken question, not the raw topic echoed back.
+    assert script.narration.startswith(script.hook)
+    assert script.hook.rstrip().endswith("?")
+    assert script.resolved_question
     assert set(script.all_claim_ids()) <= {claim.id for claim in research.claims}
     assert workspace.script_txt.exists()
 
@@ -70,6 +73,38 @@ async def test_scene_narration_reproduces_the_script(context) -> None:
     plan = load_scenes(context.workspace)
     joined = " ".join(scene.narration for scene in plan.scenes)
     assert joined == script.narration
+
+
+async def test_every_scene_holds_whole_speech_units(context) -> None:
+    """A scene owns complete units, so a cut can never land mid-sentence."""
+    from shorts_factory.pipeline import load_speech_plan
+    from shorts_factory.quality import check_scene_speech_alignment
+
+    await run_through_direct(context)
+    speech = load_speech_plan(context.workspace)
+    plan = load_scenes(context.workspace)
+
+    assert speech is not None and speech.units
+    assert check_scene_speech_alignment(plan, speech) == []
+    for scene in plan.scenes:
+        assert scene.speech_unit_ids
+        units = speech.units_for(scene.speech_unit_ids)
+        assert scene.narration == " ".join(unit.text for unit in units)
+
+
+async def test_speech_units_are_short_and_paused(context) -> None:
+    from shorts_factory.pipeline import load_speech_plan
+    from shorts_factory.utils import visible_length
+
+    await run_through_direct(context)
+    speech = load_speech_plan(context.workspace)
+    contract = context.config.voice.speech
+
+    assert all(
+        visible_length(unit.text) <= contract.hard_split_review_chars for unit in speech.units
+    )
+    assert any(unit.pause_after_ms > 0 for unit in speech.units)
+    assert speech.units[-1].pause_after_ms == 0
 
 
 async def test_fact_lock_blocks_an_unsourced_script(context) -> None:
@@ -172,7 +207,7 @@ async def test_resume_skips_completed_stages(context) -> None:
 
     result = await run_pipeline(context, until=Stage.DIRECT)
     assert result.executed == []
-    assert set(result.skipped) == {"research", "write", "fact_lock", "direct"}
+    assert set(result.skipped) == {"research", "write", "fact_lock", "speak", "direct"}
     assert executed_first == set()
 
 
@@ -181,10 +216,14 @@ async def test_full_pipeline_produces_a_valid_short(context) -> None:
     result = await run_pipeline(context)
     assert result.state is PipelineState.DONE
 
-    final = context.workspace.final_video
-    assert final.exists()
+    # Mock providers may never produce final.mp4 (spec v0.2 section 5.3).
+    preview = context.workspace.mock_preview
+    assert preview.exists()
+    assert not context.workspace.final_video.exists()
+    assert result.final_video_path is None
+    assert result.preview_video_path
 
-    info = probe(final)
+    info = probe(preview)
     assert (info.width, info.height) == (1080, 1920)
     assert info.has_video and info.has_audio
     assert info.video_codec == "h264"
@@ -192,6 +231,9 @@ async def test_full_pipeline_produces_a_valid_short(context) -> None:
     assert 45.0 <= info.duration_sec <= 70.0
 
     assert context.workspace.narration_srt.exists()
+    assert context.workspace.speech_json.exists()
+    assert context.workspace.speech_timeline_json.exists()
+    assert (context.workspace.logs_dir / "production_readiness.json").exists()
     assert context.workspace.narration_ass.exists()
     assert context.workspace.manifest_json.exists()
     assert (context.workspace.logs_dir / "validation.json").exists()

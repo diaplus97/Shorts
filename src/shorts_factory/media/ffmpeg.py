@@ -70,9 +70,19 @@ def has_filter(name: str) -> bool:
     return any(line.split()[1:2] == [name] for line in result.stdout.splitlines() if line.strip())
 
 
-def run(args: list[str], *, timeout: float = DEFAULT_TIMEOUT_SEC, label: str = "ffmpeg") -> str:
-    """Run ffmpeg synchronously. Returns stderr (where ffmpeg writes its report)."""
-    command = [ffmpeg_path(), "-hide_banner", "-nostdin", "-loglevel", "error", "-y", *args]
+def run(
+    args: list[str],
+    *,
+    timeout: float = DEFAULT_TIMEOUT_SEC,
+    label: str = "ffmpeg",
+    loglevel: str = "error",
+) -> str:
+    """Run ffmpeg synchronously. Returns stderr (where ffmpeg writes its report).
+
+    Analysis filters such as ``volumedetect`` report at info level, so callers
+    that need their output must raise ``loglevel``.
+    """
+    command = [ffmpeg_path(), "-hide_banner", "-nostdin", "-loglevel", loglevel, "-y", *args]
     log.debug("ffmpeg_run", label=label, args=args)
     try:
         result = subprocess.run(
@@ -86,9 +96,13 @@ def run(args: list[str], *, timeout: float = DEFAULT_TIMEOUT_SEC, label: str = "
 
 
 async def run_async(
-    args: list[str], *, timeout: float = DEFAULT_TIMEOUT_SEC, label: str = "ffmpeg"
+    args: list[str],
+    *,
+    timeout: float = DEFAULT_TIMEOUT_SEC,
+    label: str = "ffmpeg",
+    loglevel: str = "error",
 ) -> str:
-    command = [ffmpeg_path(), "-hide_banner", "-nostdin", "-loglevel", "error", "-y", *args]
+    command = [ffmpeg_path(), "-hide_banner", "-nostdin", "-loglevel", loglevel, "-y", *args]
     log.debug("ffmpeg_run_async", label=label, args=args)
     process = await asyncio.create_subprocess_exec(
         *command,

@@ -72,6 +72,7 @@ def to_strict_schema(schema: Any) -> Any:
 
 class OpenAILLMProvider:
     name = "openai"
+    is_mock = False
 
     def __init__(
         self,

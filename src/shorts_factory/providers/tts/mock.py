@@ -15,6 +15,7 @@ from ..base import TTSResult
 
 class MockTTSProvider:
     name = "mock"
+    is_mock = True
 
     def __init__(
         self,
@@ -43,7 +44,7 @@ class MockTTSProvider:
                 "-i",
                 f"sine=frequency=180:sample_rate={self.sample_rate}:duration={duration:.3f}",
                 "-af",
-                "volume=-24dB",
+                "volume=-18dB",
                 "-ac",
                 "1",
                 str(target),

@@ -40,6 +40,8 @@ shorts_factory = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Lets every test module `import factories` for the shared object builders.
+pythonpath = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "live: hits real paid provider APIs; requires ALLOW_LIVE_API_TESTS=1",

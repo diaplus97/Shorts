@@ -1,0 +1,46 @@
+# Content Quality Contract (spec v0.2 section 36.0).
+#
+# Everything else in this repository checks whether the pipeline ran. This file
+# checks whether the result is worth watching. Each clause maps to a coded check
+# in `src/shorts_factory/quality/content_contract.py`; turning a clause off
+# turns its check off.
+
+hook:
+  # The first sentence must leave the viewer with a question.
+  must_create_question: true
+  max_seconds: 3.0
+
+script:
+  # Abstractions used where a concrete noun was available.
+  ban_generic_nouns: true
+  max_generic_nouns: 3
+  generic_nouns:
+    - 대상
+    - 장치
+    - 요소
+    - 기준값
+    - 과정
+    - 구간
+    - 시스템
+    - 부분
+    - 방식
+  # Every factual beat must be showable and say what is on screen while it plays.
+  concrete_mechanism_required: true
+
+scene:
+  visible_change_required: true
+  question_answered_required: true
+  # A shot that only restates narration, with nothing moving, is forbidden.
+  static_exposition_forbidden: true
+  # Scenes sharing one world rather than twelve unrelated clips.
+  shared_world_required: true
+
+video:
+  continuous_world_preferred: true
+  visual_subject_required: true
+
+final:
+  # A run using any mock provider may not produce final.mp4.
+  mock_assets_allowed: false
+  # A silent or near-silent voice track fails the render.
+  silent_audio_allowed: false

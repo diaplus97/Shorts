@@ -6,10 +6,22 @@ prompt adapter turns each scene into provider text afterwards.
 
 from __future__ import annotations
 
-from ..domain import ResearchResult, ScenePlan, ScriptResult
-from ..pipeline.checkpoint import require_research, require_script, save_project, save_scenes
+from ..domain import ResearchResult, ScenePlan, ScriptResult, SpeechPlan
+from ..pipeline.checkpoint import (
+    require_research,
+    require_script,
+    require_speech_plan,
+    save_project,
+    save_scenes,
+)
 from ..pipeline.context import RunContext
-from ..quality import QAIssue, check_scene_plan, check_scene_traceability
+from ..quality import (
+    QAIssue,
+    check_scene_contract,
+    check_scene_plan,
+    check_scene_speech_alignment,
+    check_scene_traceability,
+)
 from ..utils import atomic_write_text, relative_to
 from ._llm import structured_call
 from ._plan import PlannedCall, StagePlan
@@ -36,12 +48,29 @@ def script_payload(script: ScriptResult) -> dict[str, object]:
     }
 
 
-def normalize_plan(plan: ScenePlan) -> ScenePlan:
-    """Renumber scenes so ids and order are contiguous and consistent."""
+def normalize_plan(plan: ScenePlan, speech: SpeechPlan | None = None) -> ScenePlan:
+    """Renumber scenes, and rebuild narration from the speech units they cover.
+
+    Deriving narration from units rather than trusting the model's copy is what
+    makes a mid-sentence cut impossible: a scene owns whole units or none.
+    """
     scenes = []
     for index, scene in enumerate(sorted(plan.scenes, key=lambda s: s.order), start=1):
-        scenes.append(scene.model_copy(update={"id": f"S{index:02d}", "order": index}))
+        update: dict[str, object] = {"id": f"S{index:02d}", "order": index}
+        if speech is not None and scene.speech_unit_ids:
+            units = speech.units_for(scene.speech_unit_ids)
+            if units:
+                update["narration"] = " ".join(unit.text for unit in units)
+                update["claim_ids"] = _merge_claims(scene.claim_ids, units)
+        scenes.append(scene.model_copy(update=update))
     return plan.model_copy(update={"scenes": scenes})
+
+
+def _merge_claims(existing: list[str], units) -> list[str]:
+    merged = list(existing)
+    for unit in units:
+        merged.extend(cid for cid in unit.referenced_claim_ids if cid not in merged)
+    return merged
 
 
 def write_scene_prompts(context: RunContext, plan: ScenePlan) -> None:
@@ -53,12 +82,17 @@ def write_scene_prompts(context: RunContext, plan: ScenePlan) -> None:
                 f"# {scene.id} ({scene.priority} / {scene.reality_type} / {scene.asset_type})",
                 f"duration: {scene.duration_sec:.2f}s",
                 f"claims: {', '.join(scene.claim_ids) or '—'}",
+                f"answers: {scene.question_answered}",
+                f"visible change: {scene.visible_change}",
                 "",
                 "## narration",
                 scene.narration,
                 "",
+                "## caption",
+                scene.subtitle_text,
+                "",
                 "## prompt",
-                adapter.build_prompt(scene),
+                adapter.build_prompt(scene, plan),
                 "",
                 "## negative",
                 adapter.build_negative_prompt(scene),
@@ -99,17 +133,25 @@ async def run(context: RunContext) -> ScenePlan:
     settings = context.settings
     content_type = context.config.content_type(context.project.content_type)
 
+    contract = context.config.content_contract
+    speech = require_speech_plan(context.workspace)
+
     def _validate(result: ScenePlan) -> list[QAIssue]:
-        normalized = normalize_plan(result)
-        return check_scene_plan(
-            normalized, script, settings, context.config.budgets
-        ) + check_scene_traceability(normalized, research)
+        normalized = normalize_plan(result, speech)
+        return [
+            *check_scene_plan(normalized, script, settings, context.config.budgets),
+            *check_scene_traceability(normalized, research),
+            *check_scene_contract(normalized, contract),
+            *check_scene_speech_alignment(normalized, speech),
+        ]
 
     result, prompt = await structured_call(
         context,
         prompt_name="director",
         variables={
             "topic": context.project.topic,
+            "resolved_question": research.question.resolved_question,
+            "scope": research.question.scope,
             "content_type": context.project.content_type,
             "default_reality_type": content_type.default_reality_type,
             "min_scenes": settings.scenes.min_scenes,
@@ -122,14 +164,29 @@ async def run(context: RunContext) -> ScenePlan:
             "reveal_pattern_json": content_type.reveal_pattern,
             "preferred_camera_json": content_type.preferred_camera,
             "preferred_visuals_json": content_type.preferred_visuals,
+            "transitions_json": context.config.visual_styles.style.transitions,
+            "max_caption_chars": (
+                settings.subtitles.max_chars_per_line * settings.subtitles.max_lines
+            ),
             "script_json": script_payload(script),
+            "speech_units_json": [
+                {
+                    "id": unit.id,
+                    "text": unit.text,
+                    "delivery": unit.delivery.value,
+                    "pause_after_ms": unit.pause_after_ms,
+                    "beat_id": unit.beat_id,
+                    "claim_ids": unit.referenced_claim_ids,
+                }
+                for unit in speech.units
+            ],
             "claims_json": claims_payload(research),
         },
         schema=ScenePlan,
         validate=_validate,
     )
 
-    scene_plan = normalize_plan(result).model_copy(
+    scene_plan = normalize_plan(result, speech).model_copy(
         update={"prompt_version": prompt.version, "prompt_hash": prompt.hash}
     )
     save_scenes(context.workspace, scene_plan)

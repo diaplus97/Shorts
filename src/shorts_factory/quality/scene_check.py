@@ -12,7 +12,11 @@ def check_script(script: ScriptResult, settings: Settings) -> list[QAIssue]:
     issues: list[QAIssue] = []
     script_settings = settings.script
 
-    estimated = visible_length(script.narration) / script_settings.chars_per_sec
+    # Spoken characters plus the pause budget: what the finished video will run.
+    estimated = (
+        visible_length(script.narration) / script_settings.chars_per_sec
+        + script_settings.pause_budget_sec
+    )
     if not script_settings.min_duration_sec <= estimated <= script_settings.max_duration_sec:
         issues.append(
             error(

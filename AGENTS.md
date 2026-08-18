@@ -32,6 +32,17 @@ design document is `docs/IMPLEMENTATION_SPEC.md`.
   back to a still image with camera motion, and the fallback is recorded.
 - Separate observed / reconstructed / conceptual visuals. An explanatory
   visualisation must never be labelled `observed`.
+- A run containing any mock provider is not production. It writes
+  `output/mock_preview.mp4` with a burned-in label, never `final.mp4`. Encode to
+  a staging path and publish only after the readiness gate passes.
+- An audio stream is not a voice. A silent or near-silent track fails the render
+  for mock and production runs alike.
+- `SpeechPlan` decides how the narration is broken into breaths. Scenes hold
+  whole speech units and derive their narration from them, so a cut can never
+  land mid-sentence.
+- Speech planning is a deterministic stage, not an LLM call and not an agent.
+- Provider-specific TTS syntax never enters the domain model. It lives in the
+  TTS adapter.
 - Do not expand the scope without an explicit requirement.
 
 ## Layout
@@ -42,9 +53,10 @@ src/shorts_factory/
   pipeline/   Orchestrator, project state, checkpoints, workspace layout.
   stages/     One module per stage. Ordinary functions.
   providers/  Protocols plus one implementation per kind.
-  media/      ffmpeg/ffprobe wrappers, normalisation, subtitles, composition.
+  media/      ffmpeg/ffprobe wrappers, normalisation, audio QA, subtitles, composition.
   quality/    Structural, factual and technical checks.
   cost/       Cost ledger and budget guard.
+  quality/    Includes the content and speech contracts, and the readiness gate.
   utils/      Small helpers with no package dependencies.
 ```
 

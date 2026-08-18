@@ -2,10 +2,12 @@
 
 from .asset import AssetLedger, AssetRecord, Provenance
 from .enums import (
+    NON_FACTUAL_PURPOSES,
     STAGE_COMPLETION_STATE,
     STAGE_ORDER,
     AssetStatus,
     AssetType,
+    BeatPurpose,
     ClaimConfidence,
     ContentType,
     PipelineState,
@@ -17,27 +19,42 @@ from .enums import (
 )
 from .manifest import Manifest, ManifestScene
 from .project import CostSummary, Project, StageRecord, utcnow
-from .research import Claim, ResearchResult, SourceRef
-from .scene import ContinuitySpec, Scene, ScenePlan
+from .research import Claim, QuestionSpec, ResearchResult, SourceRef
+from .scene import ContinuitySpec, Scene, ScenePlan, WorldSpec
 from .script import ScriptBeat, ScriptResult
+from .speech import (
+    MAX_PAUSE_MS,
+    DeliveryMode,
+    SpeechPlan,
+    SpeechTimeline,
+    SpeechTimingEntry,
+    SpeechUnit,
+    ToneProfile,
+    gap_ms_before,
+)
 
 __all__ = [
+    "MAX_PAUSE_MS",
+    "NON_FACTUAL_PURPOSES",
     "STAGE_COMPLETION_STATE",
     "STAGE_ORDER",
     "AssetLedger",
     "AssetRecord",
     "AssetStatus",
     "AssetType",
+    "BeatPurpose",
     "Claim",
     "ClaimConfidence",
     "ContentType",
     "ContinuitySpec",
     "CostSummary",
+    "DeliveryMode",
     "Manifest",
     "ManifestScene",
     "PipelineState",
     "Project",
     "Provenance",
+    "QuestionSpec",
     "RealityType",
     "ResearchResult",
     "Scene",
@@ -46,9 +63,16 @@ __all__ = [
     "ScriptBeat",
     "ScriptResult",
     "SourceRef",
+    "SpeechPlan",
+    "SpeechTimeline",
+    "SpeechTimingEntry",
+    "SpeechUnit",
     "Stage",
     "StageRecord",
     "StageStatus",
+    "ToneProfile",
+    "WorldSpec",
+    "gap_ms_before",
     "stages_up_to",
     "utcnow",
 ]

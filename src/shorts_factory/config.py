@@ -72,6 +72,15 @@ class ResearchSettings(BaseModel):
     target_claims: int = 10
 
 
+class AudioQualitySettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    min_mean_volume_db: float = -50.0
+    max_silence_ratio: float = 0.5
+    silence_threshold_db: float = -50.0
+    min_silence_sec: float = 0.5
+
+
 class QualitySettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -79,6 +88,7 @@ class QualitySettings(BaseModel):
     llm_fact_check: bool = False
     #: Refuse to render when a structural warning is present, not just an error.
     strict: bool = False
+    audio: AudioQualitySettings = Field(default_factory=AudioQualitySettings)
 
 
 class VideoSettings(BaseModel):
@@ -115,6 +125,7 @@ class ScriptSettings(BaseModel):
     min_duration_sec: float = 45.0
     max_duration_sec: float = 70.0
     chars_per_sec: float = 6.2
+    pause_budget_sec: float = 6.0
 
 
 class SceneSettings(BaseModel):
@@ -246,6 +257,91 @@ class Budgets(BaseModel):
         return float(self.pricing.get(kind, {}).get(provider, {}).get(metric, default))
 
 
+class HookContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    must_create_question: bool = True
+    max_seconds: float = 3.0
+
+
+class ScriptContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ban_generic_nouns: bool = True
+    max_generic_nouns: int = 3
+    generic_nouns: list[str] = Field(default_factory=list)
+    concrete_mechanism_required: bool = True
+
+
+class SceneContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    visible_change_required: bool = True
+    question_answered_required: bool = True
+    static_exposition_forbidden: bool = True
+    shared_world_required: bool = True
+
+
+class VideoContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    continuous_world_preferred: bool = True
+    visual_subject_required: bool = True
+
+
+class FinalContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mock_assets_allowed: bool = False
+    silent_audio_allowed: bool = False
+
+
+class ContentContract(BaseModel):
+    """Acceptance criteria for the content itself, not for the code."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hook: HookContract = Field(default_factory=HookContract)
+    script: ScriptContract = Field(default_factory=ScriptContract)
+    scene: SceneContract = Field(default_factory=SceneContract)
+    video: VideoContract = Field(default_factory=VideoContract)
+    final: FinalContract = Field(default_factory=FinalContract)
+
+
+class PauseTable(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clause: int = 150
+    shift: int = 250
+    sentence: int = 320
+    question: int = 380
+    reveal: int = 450
+    section: int = 550
+
+
+class SpeechContract(BaseModel):
+    """How narration must be broken into breaths (spec v0.3 section 19)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_unit_chars: int = 4
+    max_preferred_unit_chars: int = 30
+    hard_split_review_chars: int = 40
+    max_information_events: int = 1
+    max_consecutive_same_ending: int = 3
+    min_length_variation_ratio: float = 0.25
+    pauses_ms: PauseTable = Field(default_factory=PauseTable)
+    clause_endings: list[str] = Field(default_factory=list)
+    tracked_endings: list[str] = Field(default_factory=list)
+
+
+class VoiceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tone_profile: dict[str, Any] = Field(default_factory=dict)
+    speech: SpeechContract = Field(default_factory=SpeechContract)
+
+
 class ContentTypeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -263,19 +359,42 @@ class RealityTypeStyle(BaseModel):
     suffix: str = ""
 
 
-class DefaultVisualStyle(BaseModel):
+class Realism(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    base_style: str = ""
-    color_grade: str = ""
-    motion: str = ""
-    negative_constraints: list[str] = Field(default_factory=list)
+    photorealistic: bool = True
+    physically_plausible: bool = True
+
+
+class StyleBible(BaseModel):
+    """The look every scene shares, and what it must never contain."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    genre: str = "documentary CGI"
+    realism: Realism = Field(default_factory=Realism)
+    palette: list[str] = Field(default_factory=list)
+    camera: list[str] = Field(default_factory=list)
+    lighting: list[str] = Field(default_factory=list)
+    transitions: list[str] = Field(default_factory=list)
+    avoid: list[str] = Field(default_factory=list)
+
+    def as_prompt_fragment(self) -> str:
+        parts = [self.genre]
+        if self.realism.photorealistic:
+            parts.append("photorealistic")
+        if self.realism.physically_plausible:
+            parts.append("physically plausible materials and motion")
+        parts.extend(self.palette)
+        parts.extend(self.camera)
+        parts.extend(self.lighting)
+        return ", ".join(part.strip() for part in parts if part.strip())
 
 
 class VisualStyles(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    default: DefaultVisualStyle = Field(default_factory=DefaultVisualStyle)
+    style: StyleBible = Field(default_factory=StyleBible)
     reality_type_style: dict[str, RealityTypeStyle] = Field(default_factory=dict)
 
 
@@ -289,6 +408,8 @@ class AppConfig(BaseModel):
     budgets: Budgets
     content_types: dict[str, ContentTypeConfig]
     visual_styles: VisualStyles
+    content_contract: ContentContract
+    voice: VoiceConfig
 
     def content_type(self, name: str) -> ContentTypeConfig:
         try:
@@ -326,6 +447,10 @@ def load_config(config_dir: str | Path | None = None, *, load_env: bool = True) 
             name: ContentTypeConfig.model_validate(value) for name, value in raw_types.items()
         }
         visual_styles = VisualStyles.model_validate(_load_yaml(directory / "visual_styles.yaml"))
+        content_contract = ContentContract.model_validate(
+            _load_yaml(directory / "content_contract.yaml")
+        )
+        voice = VoiceConfig.model_validate(_load_yaml(directory / "voice.yaml"))
     except ConfigError:
         raise
     except Exception as exc:  # pydantic ValidationError and friends
@@ -337,6 +462,8 @@ def load_config(config_dir: str | Path | None = None, *, load_env: bool = True) 
         budgets=budgets,
         content_types=content_types,
         visual_styles=visual_styles,
+        content_contract=content_contract,
+        voice=voice,
     )
 
 

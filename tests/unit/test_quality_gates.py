@@ -1,184 +1,134 @@
-"""Structural QA, fact traceability and technical checks."""
+"""Structural QA, fact traceability and the content quality contract."""
 
 from __future__ import annotations
 
+from factories import (
+    make_claim,
+    make_research,
+    make_scenes,
+    make_script,
+    make_source,
+)
 from shorts_factory.domain import (
     AssetLedger,
     AssetRecord,
     AssetStatus,
     AssetType,
-    Claim,
-    ClaimConfidence,
-    RealityType,
-    ResearchResult,
-    Scene,
-    ScenePlan,
+    BeatPurpose,
     ScenePriority,
     ScriptBeat,
-    ScriptResult,
-    SourceRef,
 )
 from shorts_factory.quality import (
     affected_scenes,
     check_assets,
+    check_generic_nouns,
+    check_hook,
     check_research,
+    check_scene_contract,
     check_scene_plan,
     check_script,
+    check_script_contract,
     check_script_traceability,
     fact_lock_issues,
 )
 
+NARRATION = "가" * 300
 
-def research_with(*claims: Claim) -> ResearchResult:
-    return ResearchResult(
-        topic="t",
-        summary="s",
-        claims=list(claims),
-        sources=[SourceRef(id="S01", title="t", url="https://example.invalid/1")],
+
+def codes(issues) -> set[str]:
+    return {issue.code for issue in issues}
+
+
+def script_with(text: str, **overrides) -> object:
+    """A single-beat script whose narration is exactly `text`."""
+    beat = ScriptBeat(
+        id="B01",
+        purpose=BeatPurpose.HOOK,
+        text=text,
+        visualizable=True,
+        visual_payoff="카메라가 다가간다",
     )
+    return make_script(hook=text, narration=text, beats=[beat], **overrides)
 
 
-def build_script(narration_chars: int = 360, **overrides) -> ScriptResult:
-    body = "가" * narration_chars
-    beats = [ScriptBeat(id="B01", purpose="hook", text=body, claim_ids=["C01"])]
-    base = {
-        "title": "t",
-        "hook": body,
-        "narration": body,
-        "beats": beats,
-        "target_duration_sec": 58,
-        "referenced_claim_ids": ["C01"],
-    }
-    base.update(overrides)
-    return ScriptResult(**base)
-
-
-def make_scenes(count: int, narration: str, total: float = 58.0) -> ScenePlan:
-    per = total / count
-    chunk = len(narration) // count
-    scenes = []
-    for index in range(count):
-        start = index * chunk
-        end = len(narration) if index == count - 1 else (index + 1) * chunk
-        scenes.append(
-            Scene(
-                id=f"S{index + 1:02d}",
-                order=index + 1,
-                narration=narration[start:end],
-                duration_sec=round(per, 3),
-                purpose="process",
-                visual_subject="subject",
-                environment="environment",
-                action="action",
-                camera="camera",
-                reality_type=RealityType.RECONSTRUCTED,
-                priority=ScenePriority.MEDIUM,
-                asset_type=AssetType.VIDEO,
-                claim_ids=["C01"],
-            )
-        )
-    return ScenePlan(scenes=scenes)
+# -- script structure -------------------------------------------------------
 
 
 def test_script_duration_window(settings) -> None:
-    too_short = build_script(narration_chars=100)
-    codes = {issue.code for issue in check_script(too_short, settings)}
-    assert "script_duration" in codes
-
-    ok = build_script(narration_chars=360)
-    assert "script_duration" not in {issue.code for issue in check_script(ok, settings)}
+    assert "script_duration" in codes(check_script(make_script(narration_chars=100), settings))
+    assert "script_duration" not in codes(check_script(make_script(narration_chars=320), settings))
 
 
 def test_banned_intro_and_hype_are_errors(settings) -> None:
-    body = "안녕하세요 " + "가" * 355
-    script = build_script(
-        narration_chars=1,
-        hook=body,
-        narration=body,
-        beats=[ScriptBeat(id="B01", purpose="hook", text=body)],
-    )
-    codes = {issue.code for issue in check_script(script, settings)}
-    assert "script_intro" in codes
+    intro = "안녕하세요 " + "가" * 295
+    assert "script_intro" in codes(check_script(script_with(intro), settings))
 
-    hype = "여러분은 평생 속고 있었습니다 " + "가" * 340
-    script2 = build_script(
-        narration_chars=1,
-        hook=hype,
-        narration=hype,
-        beats=[ScriptBeat(id="B01", purpose="hook", text=hype)],
-    )
-    assert "script_hype" in {issue.code for issue in check_script(script2, settings)}
+    hype = "여러분은 평생 속고 있었습니다 " + "가" * 285
+    assert "script_hype" in codes(check_script(script_with(hype), settings))
 
 
 def test_narration_must_equal_the_joined_beats(settings) -> None:
-    script = build_script(
-        beats=[ScriptBeat(id="B01", purpose="hook", text="다른 문장입니다.")],
+    script = make_script(
+        beats=[ScriptBeat(id="B01", purpose=BeatPurpose.HOOK, text="다른 문장입니다.")]
     )
-    codes = {issue.code for issue in check_script(script, settings)}
-    assert "script_narration_mismatch" in codes
+    assert "script_narration_mismatch" in codes(check_script(script, settings))
+
+
+# -- fact traceability ------------------------------------------------------
 
 
 def test_unsourced_claim_may_not_reach_the_script() -> None:
-    research = research_with(Claim(id="C01", statement="a", confidence=ClaimConfidence.HIGH))
-    script = build_script()
-    codes = {issue.code for issue in check_script_traceability(script, research)}
-    assert "script_unsourced_claim" in codes
+    research = make_research(claims=[make_claim(source_ids=[])])
+    assert "script_unsourced_claim" in codes(check_script_traceability(make_script(), research))
 
 
 def test_unknown_claim_reference_is_an_error() -> None:
-    research = research_with(
-        Claim(id="C02", statement="a", confidence=ClaimConfidence.HIGH, source_ids=["S01"])
-    )
-    codes = {issue.code for issue in check_script_traceability(build_script(), research)}
-    assert "script_unknown_claim" in codes
+    research = make_research(claims=[make_claim("C02")])
+    assert "script_unknown_claim" in codes(check_script_traceability(make_script(), research))
 
 
 def test_fact_lock_passes_for_a_sourced_script() -> None:
-    research = research_with(
-        Claim(id="C01", statement="a", confidence=ClaimConfidence.HIGH, source_ids=["S01"])
-    )
-    issues = fact_lock_issues(build_script(), research)
+    issues = fact_lock_issues(make_script(), make_research())
     assert [issue for issue in issues if issue.level == "error"] == []
 
 
 def test_research_without_sources_fails() -> None:
-    research = ResearchResult(topic="t", summary="s", claims=[], sources=[])
-    codes = {issue.code for issue in check_research(research)}
-    assert "research_empty" in codes
-    assert "research_no_supported_claims" in codes
+    research = make_research(claims=[], sources=[])
+    assert {"research_empty", "research_no_supported_claims"} <= codes(check_research(research))
+
+
+def test_dangling_source_reference_is_an_error() -> None:
+    research = make_research(claims=[make_claim(source_ids=["S99"])], sources=[make_source()])
+    assert "research_dangling_sources" in codes(check_research(research))
+
+
+# -- scene plan -------------------------------------------------------------
 
 
 def test_scene_count_window(settings, budgets) -> None:
-    narration = "가" * 360
-    script = build_script()
-    too_few = make_scenes(3, narration, total=12.0)
-    codes = {issue.code for issue in check_scene_plan(too_few, script, settings, budgets)}
-    assert "scene_count" in codes
+    script = make_script(narration=NARRATION, hook=NARRATION[:20])
+    too_few = make_scenes(3, NARRATION, total=12.0)
+    assert "scene_count" in codes(check_scene_plan(too_few, script, settings, budgets))
 
-    ok = make_scenes(10, narration)
-    codes = {issue.code for issue in check_scene_plan(ok, script, settings, budgets)}
-    assert "scene_count" not in codes
+    ok = make_scenes(10, NARRATION)
+    assert "scene_count" not in codes(check_scene_plan(ok, script, settings, budgets))
 
 
 def test_scene_narration_must_cover_the_script(settings, budgets) -> None:
-    script = build_script()
-    plan = make_scenes(10, "다" * 360)
-    codes = {issue.code for issue in check_scene_plan(plan, script, settings, budgets)}
-    assert "scene_narration_coverage" in codes
+    script = make_script(narration=NARRATION, hook=NARRATION[:20])
+    plan = make_scenes(10, "다" * 300)
+    assert "scene_narration_coverage" in codes(check_scene_plan(plan, script, settings, budgets))
 
 
 def test_high_priority_budget_is_enforced(settings, budgets) -> None:
-    narration = "가" * 360
-    plan = make_scenes(10, narration)
+    script = make_script(narration=NARRATION, hook=NARRATION[:20])
+    plan = make_scenes(10, NARRATION)
     plan = plan.model_copy(
         update={
-            "scenes": [
-                scene.model_copy(update={"priority": ScenePriority.HIGH}) for scene in plan.scenes
-            ]
+            "scenes": [s.model_copy(update={"priority": ScenePriority.HIGH}) for s in plan.scenes]
         }
     )
-    codes = {issue.code for issue in check_scene_plan(plan, build_script(), settings, budgets)}
-    assert "scene_priority_budget" in codes
+    assert "scene_priority_budget" in codes(check_scene_plan(plan, script, settings, budgets))
 
 
 def test_asset_checks_flag_missing_and_fallback() -> None:
@@ -195,12 +145,77 @@ def test_asset_checks_flag_missing_and_fallback() -> None:
             fallback_used=True,
         )
     )
-    codes = {issue.code for issue in check_assets(plan, ledger)}
-    assert "asset_fallback" in codes
-    assert "asset_missing" in codes
+    assert {"asset_fallback", "asset_missing"} <= codes(check_assets(plan, ledger))
 
 
 def test_affected_scenes_traces_a_claim() -> None:
     plan = make_scenes(3, "가" * 30, total=9.0)
     assert affected_scenes(plan, "C01") == ["S01", "S02", "S03"]
     assert affected_scenes(plan, "C99") == []
+
+
+# -- content quality contract ----------------------------------------------
+
+
+def test_hook_must_pose_a_question(config, settings) -> None:
+    contract = config.content_contract
+    flat = make_script(hook="ATM 안에는 롤러가 있습니다.")
+    assert "hook_no_question" in codes(check_hook(flat, contract, settings.script))
+
+    asked = make_script(hook="ATM은 지폐를 어떻게 셀까요?")
+    assert "hook_no_question" not in codes(check_hook(asked, contract, settings.script))
+
+
+def test_hook_must_fit_three_seconds(config, settings) -> None:
+    long_hook = "ATM에 지폐를 여러 장 넣었을 때 이 기계가 각각을 어떻게 구분하는지 생각해 보신 적 있으신가요?"
+    issues = check_hook(make_script(hook=long_hook), config.content_contract, settings.script)
+    assert "hook_too_long" in codes(issues)
+
+
+def test_generic_nouns_are_capped(config) -> None:
+    vague = "센서가 대상의 위치를 확인합니다. 이 장치의 과정은 구간마다 다릅니다. 시스템이 기준값을 비교합니다."
+    assert "script_generic_nouns" in codes(
+        check_generic_nouns(script_with(vague), config.content_contract)
+    )
+    concrete = "고무 롤러가 지폐를 한 장씩 끌어당깁니다. 센서가 무늬와 크기를 읽습니다."
+    assert check_generic_nouns(script_with(concrete), config.content_contract) == []
+
+
+def test_a_beat_that_cannot_be_shown_is_rejected(config, settings) -> None:
+    script = make_script(
+        beats=[
+            ScriptBeat(id="B01", purpose=BeatPurpose.HOOK, text="ATM은 어떻게 셀까요?"),
+            ScriptBeat(
+                id="B02",
+                purpose=BeatPurpose.PROCESS,
+                text="여러 단계가 순서대로 움직입니다.",
+                claim_ids=["C01"],
+                visualizable=False,
+            ),
+        ],
+        narration="ATM은 어떻게 셀까요? 여러 단계가 순서대로 움직입니다.",
+        hook="ATM은 어떻게 셀까요?",
+    )
+    issues = check_script_contract(
+        script, make_research(), config.content_contract, settings.script
+    )
+    assert {"beat_not_visualizable", "beat_no_visual_payoff"} <= codes(issues)
+
+
+def test_a_scene_with_no_visible_change_is_rejected(config) -> None:
+    plan = make_scenes(2, "가" * 40, total=8.0)
+    plan = plan.model_copy(
+        update={
+            "scenes": [
+                plan.scenes[0].model_copy(update={"visible_change": "ATM 내부입니다"}),
+                plan.scenes[1],
+            ]
+        }
+    )
+    assert "scene_static_exposition" in codes(check_scene_contract(plan, config.content_contract))
+
+
+def test_a_scene_plan_with_no_world_is_rejected(config) -> None:
+    plan = make_scenes(2, "가" * 40, total=8.0)
+    plan = plan.model_copy(update={"world": plan.world.model_copy(update={"machine_id": " "})})
+    assert "plan_no_world" in codes(check_scene_contract(plan, config.content_contract))

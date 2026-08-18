@@ -97,6 +97,8 @@ class TTSResult(BaseModel):
 @runtime_checkable
 class LLMProvider(Protocol):
     name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
     model: str
 
     async def generate_json(
@@ -111,6 +113,8 @@ class LLMProvider(Protocol):
 @runtime_checkable
 class SearchProvider(Protocol):
     name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
 
     async def search(self, query: str, *, max_results: int) -> list[SearchHit]: ...
 
@@ -118,6 +122,8 @@ class SearchProvider(Protocol):
 @runtime_checkable
 class ImageProvider(Protocol):
     name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
     model: str
 
     async def generate(
@@ -134,6 +140,8 @@ class ImageProvider(Protocol):
 @runtime_checkable
 class VideoProvider(Protocol):
     name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
     model: str
 
     async def submit(
@@ -153,6 +161,8 @@ class VideoProvider(Protocol):
 @runtime_checkable
 class TTSProvider(Protocol):
     name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
     model: str
 
     async def synthesize(self, text: str, destination: str | Path) -> TTSResult: ...

@@ -7,6 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from factories import make_claim, make_research, make_scene, make_source
 from shorts_factory.domain import (
     AssetLedger,
     AssetRecord,
@@ -18,36 +19,13 @@ from shorts_factory.domain import (
     ManifestScene,
     PipelineState,
     Project,
-    RealityType,
     ResearchResult,
-    Scene,
     ScenePlan,
-    ScenePriority,
     ScriptBeat,
     ScriptResult,
-    SourceRef,
     Stage,
     utcnow,
 )
-
-
-def make_scene(**overrides) -> Scene:
-    base = {
-        "id": "S01",
-        "order": 1,
-        "narration": "안에서는 여러 단계가 순서대로 움직입니다.",
-        "duration_sec": 4.0,
-        "purpose": "reveal",
-        "visual_subject": "ATM cash counter",
-        "environment": "bank lobby",
-        "action": "cutaway revealing the note path",
-        "camera": "macro dolly in",
-        "reality_type": RealityType.RECONSTRUCTED,
-        "priority": ScenePriority.MEDIUM,
-        "asset_type": AssetType.VIDEO,
-    }
-    base.update(overrides)
-    return Scene(**base)
 
 
 def test_project_round_trip() -> None:
@@ -103,14 +81,7 @@ def test_research_rejects_duplicate_claim_ids() -> None:
 
 
 def test_research_detects_dangling_sources() -> None:
-    research = ResearchResult(
-        topic="t",
-        summary="s",
-        claims=[
-            Claim(id="C01", statement="a", confidence=ClaimConfidence.HIGH, source_ids=["S09"])
-        ],
-        sources=[SourceRef(id="S01", title="t", url="https://example.invalid/1")],
-    )
+    research = make_research(claims=[make_claim(source_ids=["S09"])], sources=[make_source("S01")])
     assert research.dangling_source_ids() == ["S09"]
     assert research.supported_claims()  # has a source id, even if dangling
 
@@ -123,6 +94,11 @@ def test_claim_without_source_is_unsupported() -> None:
 def test_script_narration_must_not_be_blank() -> None:
     with pytest.raises(ValidationError):
         ScriptResult(title="t", hook="h", narration="  ", target_duration_sec=58)
+
+
+def test_script_rejects_an_unknown_beat_purpose() -> None:
+    with pytest.raises(ValidationError):
+        ScriptBeat(id="B01", purpose="rambling", text="x")
 
 
 def test_script_collects_all_claim_ids() -> None:

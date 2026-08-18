@@ -20,7 +20,7 @@ from shorts_factory.domain import ContentType, PipelineState
 from shorts_factory.media import is_available, probe
 from shorts_factory.pipeline import build_context, create_project, run_pipeline
 from shorts_factory.providers import build_providers
-from shorts_factory.utils import configure_logging
+from shorts_factory.utils import configure_logging, read_json
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOPIC = "ATM은 돈을 어떻게 세는 걸까?"
@@ -57,10 +57,16 @@ async def main() -> int:
         problems: list[str] = []
         if result.state is not PipelineState.DONE:
             problems.append(f"pipeline ended in state {result.state}")
-        if not workspace.final_video.exists():
-            problems.append("final.mp4 was not produced")
+
+        # Every provider here is a mock, so the run must produce a watermarked
+        # preview and must never produce final.mp4.
+        output = workspace.mock_preview
+        if workspace.final_video.exists():
+            problems.append("a mock run produced final.mp4")
+        if not output.exists():
+            problems.append("mock_preview.mp4 was not produced")
         else:
-            info = probe(workspace.final_video)
+            info = probe(output)
             if (info.width, info.height) != (1080, 1920):
                 problems.append(f"resolution {info.width}x{info.height}, expected 1080x1920")
             if not info.has_audio:
@@ -74,6 +80,8 @@ async def main() -> int:
             ("scenes.json", workspace.scenes_json),
             ("manifest.json", workspace.manifest_json),
             ("narration.srt", workspace.narration_srt),
+            ("speech.json", workspace.speech_json),
+            ("speech_timeline.json", workspace.speech_timeline_json),
         ):
             if not path.exists():
                 problems.append(f"{name} is missing")
@@ -84,10 +92,12 @@ async def main() -> int:
                 print(f"  - {problem}")
             return 1
 
-        info = probe(workspace.final_video)
+        info = probe(output)
+        speech = read_json(workspace.speech_json)
         print("\nSMOKE TEST PASSED")
-        print(f"  output   : {workspace.final_video}")
+        print(f"  output   : {output}")
         print(f"  duration : {info.duration_sec:.2f}s at {info.width}x{info.height}")
+        print(f"  speech   : {len(speech['units'])} units")
         print(context.tracker.render_table())
         return 0
     finally:

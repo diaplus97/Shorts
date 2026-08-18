@@ -18,6 +18,22 @@ class SourceRef(BaseModel):
     accessed_at: str | None = None
 
 
+class QuestionSpec(BaseModel):
+    """The topic, restated as one answerable question (spec v0.2 section 12.1).
+
+    "ATM은 돈을 어떻게 세는 걸까?" covers several different machines. Pinning the
+    scope down here stops the rest of the pipeline from blending a cash-dispense
+    ATM and a deposit ATM into one impossible mechanism.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    original_topic: str
+    resolved_question: str
+    scope: str
+    excluded: list[str] = Field(default_factory=list)
+
+
 class Claim(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -40,6 +56,7 @@ class ResearchResult(BaseModel):
     schema_version: str = "1.0"
 
     topic: str
+    question: QuestionSpec
     summary: str
     claims: list[Claim] = Field(default_factory=list)
     sources: list[SourceRef] = Field(default_factory=list)

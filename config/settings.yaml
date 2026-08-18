@@ -32,6 +32,15 @@ quality:
   llm_fact_check: false
   strict: false
 
+  audio:
+    # A voice track quieter than this, or mostly silence, fails the render.
+    # Guards against shipping 55 seconds of nothing.
+    # -50 dB means 'essentially silent'; real speech sits near -25 dB.
+    min_mean_volume_db: -50.0
+    max_silence_ratio: 0.5
+    silence_threshold_db: -50.0
+    min_silence_sec: 0.5
+
 video:
   model: mock-video-1
   aspect_ratio: "9:16"
@@ -59,6 +68,9 @@ script:
   # Rough speaking rate used for duration estimation before TTS exists.
   # Korean narration, measured in characters per second.
   chars_per_sec: 6.2
+  # Planned pauses add silence on top of the spoken characters. The duration
+  # window above is the finished video, so the writer gets a smaller text budget.
+  pause_budget_sec: 6.0
 
 scenes:
   min_scenes: 8

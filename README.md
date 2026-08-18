@@ -6,8 +6,8 @@ into a rendered 1080x1920 MP4, with sources attached to every factual sentence.
 The design it implements is `docs/IMPLEMENTATION_SPEC.md`.
 
 ```
-Topic → Research → Script → Fact Lock → Scenes → Assets → Narration
-      → Subtitles → Manifest → FFmpeg → final.mp4
+Topic → Research → Script → Fact Lock → Speech Plan → Scenes → Assets
+      → Narration → Subtitles → Manifest → FFmpeg → final.mp4
 ```
 
 The runtime is a deterministic pipeline, not an agent swarm. An LLM is used at
@@ -33,6 +33,11 @@ Out of the box every provider is a mock, so this costs nothing:
 shorts create --topic "ATM은 돈을 어떻게 세는 걸까?" --type inside_object
 ```
 
+Because every provider is a mock, that produces `output/mock_preview.mp4` with a
+burned-in `MOCK PIPELINE` label — never `final.mp4`. `shorts render` refuses to
+run until the providers are real; `shorts mock-render` is the explicit
+counterpart.
+
 That produces:
 
 ```
@@ -40,14 +45,16 @@ projects/atmeun-doneul-eotteotge-seneun-geolkka/
 ├── project.json          canonical state: stages, costs, paths
 ├── research.json/.md     claims, each citing a source
 ├── script.json/.txt      narration and beats
+├── speech.json           speech units, pauses and delivery
+├── speech_timeline.json  measured start/duration per unit
 ├── scenes.json           the shot list
 ├── prompts/              rendered stage prompts + one file per scene
 ├── assets/S01/…          source asset and the normalised clip
-├── audio/narration.wav
+├── audio/narration.wav    (units/ holds one wav per speech unit)
 ├── subtitles/narration.srt   (.ass alongside it is the burn-in source)
 ├── manifest.json         final scene timings
 ├── logs/                 pipeline.jsonl, costs.jsonl, QA reports
-└── output/final.mp4
+└── output/final.mp4       (or mock_preview.mp4)
 ```
 
 ## Working on a project
@@ -64,9 +71,11 @@ shorts resume projects/<slug> --dry-run
 shorts inspect projects/<slug>
 
 # Then the expensive part, one stage at a time
+shorts speak    projects/<slug>     # free: breaths and pauses, no LLM call
 shorts generate projects/<slug>
 shorts narrate  projects/<slug>
-shorts render   projects/<slug>
+shorts render   projects/<slug>     # real providers only
+shorts mock-render projects/<slug>  # watermarked preview
 
 shorts status projects/<slug>
 shorts resume projects/<slug>     # continues, skipping finished work
@@ -85,6 +94,28 @@ grammar in `config/content_types.yaml`:
 | `hidden_system` | infrastructure you never see — sewers, baggage handling, night logistics |
 | `inside_object` | the inside of a familiar machine — ATM, escalator, automatic door |
 | `behind_action` | what a system does after you press a button — card tap, search, delivery |
+
+## What keeps the narration listenable
+
+- **One breath, one idea.** The `speak` stage turns the script into
+  `SpeechUnit`s — roughly 8–30 characters each — and assigns a pause to every
+  break based on why the break is there. It is deterministic: no extra LLM call.
+- **Scene cuts land between sentences.** A scene owns whole speech units and its
+  narration is rebuilt from them, so a cut through a spoken sentence is
+  structurally impossible rather than merely discouraged.
+- **Measured timing.** Each unit is synthesised separately and the planned
+  pauses are inserted as real silence, so scene lengths and subtitle timings
+  come from the audio rather than from proportional guesswork.
+- **One narrator.** The channel voice lives in `config/voice.yaml`. Checks catch
+  mechanical `~합니다` runs and flat rhythm.
+
+## What keeps the output publishable
+
+- **Mock is never final.** Any mock provider means `mock_preview.mp4` with a
+  burned-in label. The encode goes to a staging path and is published only after
+  the readiness gate passes.
+- **Silence fails the render.** An audio stream is not a voice: mean volume and
+  silence ratio are measured, and a dead track blocks the render outright.
 
 ## What keeps the output honest
 

@@ -38,6 +38,11 @@ class RunContext:
     def settings(self):
         return self.config.settings
 
+    @property
+    def production_ready(self) -> bool:
+        """False when any provider is a stand-in, so no output may be called final."""
+        return self.providers.production_ready
+
     def bind(self, **kwargs: Any) -> None:
         """Attach persistent fields to every subsequent log line."""
         self.log = self.log.bind(**kwargs)

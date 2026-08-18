@@ -48,10 +48,10 @@ async def test_a_killed_run_resumes_without_repeating_paid_work(config, context)
 
     result = await run_pipeline(resumed)
     assert result.state is PipelineState.DONE
-    assert set(result.skipped) >= {"research", "write", "direct", "generate"}
+    assert set(result.skipped) >= {"research", "write", "speak", "direct", "generate"}
     assert resumed.tracker.call_count("video") == first_video_calls
     assert resumed.tracker.call_count("llm") == first_llm_calls
-    assert resumed.workspace.final_video.exists()
+    assert resumed.workspace.mock_preview.exists()
 
 
 @requires_media

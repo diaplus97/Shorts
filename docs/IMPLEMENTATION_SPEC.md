@@ -4,8 +4,12 @@
 > **문서 목적:** AI를 이용해 “평소에는 볼 수 없는 시스템·사물 내부·행동 뒤의 과정”을 시각화하는 YouTube Shorts 제작 파이프라인의 구현 기준서  
 > **대상 개발 도구:** OpenAI Codex / Claude Code  
 > **권장 구현 언어:** Python 3.12  
-> **문서 상태:** MVP Implementation Spec v0.1  
+> **문서 상태:** MVP Implementation Spec v0.3  
 > **기준일:** 2026-08-18
+
+> **v0.2 개정 (Mock/Production 분리, Content Quality Contract):** 부록 C 참조.  
+> **v0.3 개정 (Spoken Narration & Scene-Speech Sync):** 부록 D 참조.  
+> 본문과 부록이 충돌하면 **부록이 우선**한다.
 
 ---
 
@@ -3145,3 +3149,210 @@ projects/atm-money-counter/output/final.mp4
 - [ ] 심각한 사실 오류 0건
 
 MVP 완료 후에만 자동 업로드와 성과 피드백 루프를 검토한다.
+
+
+---
+
+# 부록 C — v0.2 개정 (Mock/Production 분리와 Content Quality Contract)
+
+첫 구현의 결과물을 실제로 재생해 본 뒤 드러난 문제를 반영한다. 본문과 충돌하면
+이 부록을 따른다.
+
+## C.1 Mock 산출물을 final.mp4라고 부르지 않는다
+
+provider 중 하나라도 mock이면 그 실행은 production이 아니다.
+
+```text
+production_ready = 모든 provider가 real
+```
+
+- production 실행만 `output/final.mp4`를 쓴다.
+- 그 외에는 `output/mock_preview.mp4`를 쓰고, 좌측 상단에 `MOCK PIPELINE`
+  워터마크를 강제로 굽는다.
+- CLI를 명시적으로 분리한다: `shorts render`(real 전용)와 `shorts mock-render`.
+  각 명령은 반대 상황에서 거부하고, 어느 쪽을 써야 하는지 알려 준다.
+- 인코딩은 staging 경로에 하고, 게이트를 통과한 뒤에만 출력 디렉터리로 옮긴다.
+  `final.mp4`가 잘못된 상태로 존재하는 순간이 없어야 한다.
+- 둘 중 하나를 게시하면 반대쪽 산출물은 삭제한다.
+
+## C.2 Technical QA 강화
+
+오디오 스트림의 존재는 소리의 존재가 아니다. ffprobe로는 구분되지 않는다.
+
+```text
+VIDEO   stream 존재 / 1080x1920 / duration > 0
+AUDIO   stream 존재 / mean volume ≥ floor / silence ratio ≤ max
+CONTENT mock provider 미사용 / scene asset 전부 존재
+```
+
+`ProductionReadinessResult.ready == False`면 `final.mp4`를 만들지 않는다.
+video·audio가 무효면 mock 실행이라도 **아무것도 게시하지 않는다.**
+
+임계값은 `config/settings.yaml`의 `quality.audio`에 둔다.
+
+## C.3 Research가 질문을 먼저 정규화한다
+
+주제 문장은 대개 모호하다. Research는 조사 전에 다음을 확정한다.
+
+```yaml
+original_topic:   "ATM은 돈을 어떻게 세는 걸까?"
+resolved_question: "현금 입금이 가능한 ATM은 들어온 지폐를 어떻게 한 장씩 분리하고 확인하는가?"
+scope:            "현금 입금·환류형 ATM의 지폐 수납 경로"
+excluded:         ["제조사별 비공개 설계", "인출 전용 ATM의 방출 경로"]
+```
+
+Writer와 Director는 `topic`이 아니라 `resolved_question`을 받는다.
+
+## C.4 Director는 각 Scene이 존재할 이유를 적는다
+
+```yaml
+question_answered: "여러 장의 지폐가 어떻게 한 장이 되는가?"
+key_object:        "a single banknote at the front of the stack"
+mechanism:         "a rubber feed roller grips the front note"
+visible_change:    "stack of notes at rest → one note peeled off and moving inward"
+camera_path:       "macro tracking shot alongside the roller"
+```
+
+`visible_change`를 전환(→)으로 쓸 수 없다면 그 Scene은 static exposition이다.
+이웃 Scene과 합치거나 버린다.
+
+## C.5 하나의 World를 공유한다
+
+12개의 독립 클립이 아니라 하나의 기계를 12번 찍은 것이어야 한다.
+
+```yaml
+world:
+  machine_id:   ATM_DEPOSIT_001
+  visual_style: documentary CGI cutaway
+  environment:  a modern Korean indoor ATM booth
+continuity:
+  - continuity_id: NOTE_HERO
+    fixed_description: "a single generic banknote, muted blue-green paper, ..."
+```
+
+Scene은 `continuity_ids`로 참조만 한다. 설명을 복제하지 않는다. Prompt Adapter가
+world와 참조된 description을 **모든** prompt에 주입한다.
+
+## C.6 Style Bible
+
+`config/visual_styles.yaml`은 look과 함께 **금지 목록**을 갖는다. 영상 모델은
+"기술 설명"이라는 말을 들으면 홀로그램과 공중 UI를 만든다. `avoid` 목록은
+director가 무엇을 썼든 모든 negative prompt에 들어간다.
+
+## C.7 Content Quality Contract
+
+`config/content_contract.yaml`. 코드가 강제하는 조항이며, 끄면 검사도 꺼진다.
+
+```yaml
+hook:   { must_create_question: true, max_seconds: 3 }
+script: { ban_generic_nouns: true, max_generic_nouns: 3, concrete_mechanism_required: true }
+scene:  { visible_change_required: true, question_answered_required: true,
+          static_exposition_forbidden: true, shared_world_required: true }
+final:  { mock_assets_allowed: false, silent_audio_allowed: false }
+```
+
+---
+
+# 부록 D — v0.3 개정 (Spoken Narration & Scene-Speech Sync)
+
+## D.1 문제
+
+`Writer → narration 문자열 → TTS` 구조에서는 한 호흡이 길어지고, 한 문장에 여러
+사건이 들어가며, Scene 경계가 음성 의미 단위와 무관하게 정해진다.
+
+## D.2 새 데이터 흐름
+
+```text
+ResearchResult → ScriptResult → SpeechPlan → Scene[] → TTS → Timeline → Caption
+```
+
+`ScriptResult`는 **무엇을 어떤 순서로** 말할지, `SpeechPlan`은 **어떻게 끊어
+읽을지**를 담는다. 둘 다 유지한다.
+
+## D.3 SpeechUnit / SpeechPlan
+
+```python
+class SpeechUnit(BaseModel):
+    id: str
+    text: str
+    pause_before_ms: int = 0
+    pause_after_ms: int = 0
+    delivery: DeliveryMode = DeliveryMode.NEUTRAL
+    emphasis_words: list[str] = []
+    referenced_claim_ids: list[str] = []
+    beat_id: str | None = None
+    preferred_scene_id: str | None = None
+```
+
+`SpeechPlan`은 `tone_profile`, `units`, `target_duration_sec`,
+`estimated_duration_sec`를 갖는다. 인접한 `pause_after`/`pause_before`는
+더해지지 않고 **큰 쪽이 이긴다**.
+
+## D.4 Speech Planner는 Agent가 아니다
+
+`speak` 스테이지는 **LLM을 호출하지 않는다.** 이미 쓰인 한국어를 호흡으로 나누는
+일은 규칙으로 충분하고, 모델을 부르면 비용·지연·비결정성만 늘어난다.
+리듬(문장 길이 변화)은 분절기가 만들 수 없으므로 Writer 프롬프트가 담당하고,
+결과는 contract가 검사한다.
+
+분절 규칙:
+
+```text
+≤ 30자   그대로 둔다
+31~40자  경고, 분할은 하지 않는다
+> 40자   쉼표 → 연결어미(면서/는데/지만/니까/…) 순으로 분할
+```
+
+고유명사·숫자·조사가 잘려 나가지 않도록 `min_unit_chars` 미만 조각은 이웃에
+다시 붙인다.
+
+## D.5 Pause는 이유가 있어야 한다
+
+`config/voice.yaml`의 표에서 온다. 코드에 매직 넘버를 두지 않는다.
+
+```text
+clause 150 / shift 250 / sentence 320 / question 380 / reveal 450 / section 550 (ms)
+```
+
+## D.6 Scene은 완결된 unit만 갖는다
+
+Scene은 `speech_unit_ids`를 갖고, `narration`은 **그 unit들을 이어 붙여 다시
+생성한다.** 문장 중간에서 컷이 나는 것이 구조적으로 불가능해진다.
+모든 unit은 순서대로 정확히 한 번씩 사용된다.
+
+## D.7 TTS는 unit 단위로 합성한다
+
+unit별 합성 후 계획된 pause만큼 무음을 삽입해 이어 붙인다.
+
+- 문자당 과금 provider에서는 1회 호출과 **총 비용이 같다.**
+- 대가는 요청 수 증가, 얻는 것은 unit별 **실측 타이밍**이다. Scene 길이와 자막
+  타이밍이 추정이 아니라 측정값이 된다.
+- provider 문법은 Domain에 넣지 않는다. `SpeechPlan → TTS Adapter → provider`.
+  Adapter는 unit 분할 방식과 단일 문자열(문장부호·단락) 방식을 모두 제공한다.
+
+## D.8 Subtitle은 SpeechUnit에서 만든다
+
+narration 문자열을 다시 자르지 않는다. unit 하나가 cue 하나이고, cue는 뒤따르는
+pause 동안 유지된다. 길면 2줄까지 wrap하되 의미 단위는 쪼개지 않는다.
+
+## D.9 Speech Contract
+
+`config/voice.yaml`. `max_preferred_unit_chars`, `hard_split_review_chars`,
+`max_information_events`, `max_consecutive_same_ending`,
+`min_length_variation_ratio`, `pauses_ms`.
+
+검사 항목: unit 길이, 한 호흡 다중 사건, 어미 반복, 리듬 평탄화, pause 부재,
+Scene-Speech 정합.
+
+## D.10 Narrator Persona
+
+`config/voice.yaml`의 `tone_profile`. 코드나 프롬프트에 하드코딩하지 않는다.
+
+```yaml
+persona: calm_curiosity_documentary
+formality: polite_conversational
+energy: moderate
+```
+
+`~합니다/~됩니다`가 기본이되 전부 같은 어미로 끝내지 않는다. 전환·부연에 `~죠`,
+`~는데요`, 질문에 `~까요?`를 **기능에 따라** 쓴다.

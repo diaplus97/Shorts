@@ -9,7 +9,16 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from ..domain import AssetLedger, Manifest, Project, ResearchResult, ScenePlan, ScriptResult
+from ..domain import (
+    AssetLedger,
+    Manifest,
+    Project,
+    ResearchResult,
+    ScenePlan,
+    ScriptResult,
+    SpeechPlan,
+    SpeechTimeline,
+)
 from ..errors import PipelineValidationError
 from ..utils import atomic_write_model, read_json
 from .workspace import ProjectWorkspace
@@ -46,6 +55,29 @@ def load_script(workspace: ProjectWorkspace) -> ScriptResult | None:
 
 def save_script(workspace: ProjectWorkspace, script: ScriptResult) -> Path:
     return atomic_write_model(workspace.script_json, script)
+
+
+def load_speech_plan(workspace: ProjectWorkspace) -> SpeechPlan | None:
+    return _load(workspace.speech_json, SpeechPlan)
+
+
+def save_speech_plan(workspace: ProjectWorkspace, plan: SpeechPlan) -> Path:
+    return atomic_write_model(workspace.speech_json, plan)
+
+
+def load_speech_timeline(workspace: ProjectWorkspace) -> SpeechTimeline | None:
+    return _load(workspace.speech_timeline_json, SpeechTimeline)
+
+
+def save_speech_timeline(workspace: ProjectWorkspace, timeline: SpeechTimeline) -> Path:
+    return atomic_write_model(workspace.speech_timeline_json, timeline)
+
+
+def require_speech_plan(workspace: ProjectWorkspace) -> SpeechPlan:
+    plan = load_speech_plan(workspace)
+    if plan is None:
+        raise PipelineValidationError("speech.json is missing; run `shorts speak` first")
+    return plan
 
 
 def load_scenes(workspace: ProjectWorkspace) -> ScenePlan | None:

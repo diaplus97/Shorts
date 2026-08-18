@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from shorts_factory.domain import AssetType, RealityType, Scene, ScenePriority
+from factories import make_plan, make_scene
+from shorts_factory.domain import RealityType
 from shorts_factory.errors import ConfigError, ProviderError
 from shorts_factory.prompts import PROMPT_VERSIONS, load_prompt, render, unused_variables
 from shorts_factory.providers.base import assert_live_calls_allowed, require_secret
@@ -90,27 +91,33 @@ def test_strict_schema_forbids_extras_and_requires_everything() -> None:
 
 def test_prompt_adapter_builds_a_provider_prompt(config) -> None:
     adapter = GenericPromptAdapter(config.visual_styles)
-    scene = Scene(
-        id="S01",
-        order=1,
-        duration_sec=4.0,
-        purpose="reveal",
+    scene = make_scene(
         visual_subject="ATM note counter",
-        environment="inside the cash cassette",
-        action="rollers separate one note",
-        camera="macro dolly in",
+        camera_path="macro dolly in along the note",
         reality_type=RealityType.CONCEPTUAL,
-        priority=ScenePriority.HIGH,
-        asset_type=AssetType.VIDEO,
         negative_constraints=["duplicated notes"],
     )
     prompt = adapter.build_prompt(scene)
     assert "ATM note counter" in prompt
-    assert "camera: macro dolly in" in prompt
-    # Conceptual scenes must be marked as explanatory, not as real footage.
+    assert "camera: macro dolly in along the note" in prompt
+    # The change is the shot: a model given no change returns a still life.
+    assert f"visible change during the shot: {scene.visible_change}" in prompt
+    # Conceptual scenes must read as explanatory, not as real footage.
     assert "diagrammatic" in prompt
 
     negative = adapter.build_negative_prompt(scene)
     assert "duplicated notes" in negative
-    assert "visible text" in negative
+    assert "generated text" in negative
+    # The Style Bible bans holograms outright, whatever the director wrote.
+    assert "sci-fi holograms" in negative
     assert negative.count("logos") == 1  # de-duplicated
+
+
+def test_prompt_adapter_injects_the_shared_world(config) -> None:
+    """Every prompt carries the same machine and room, or scenes drift apart."""
+    adapter = GenericPromptAdapter(config.visual_styles)
+    plan = make_plan([make_scene(continuity_ids=["NOTE_HERO"])])
+    prompt = adapter.build_prompt(plan.scenes[0], plan)
+    assert plan.world.environment in prompt
+    assert "consistent NOTE_HERO" in prompt
+    assert "one worn banknote" in prompt

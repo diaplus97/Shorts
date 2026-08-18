@@ -1,22 +1,33 @@
-"""Composition stage: normalised clips + voice + subtitles -> final.mp4.
+"""Composition stage: normalised clips + voice + subtitles -> a video file.
 
-normalize scenes -> concat -> voiceover -> bgm ducking -> subtitle -> encode
+    normalize scenes -> concat -> voiceover -> bgm ducking -> subtitle -> encode
+    -> production readiness gate -> publish
+
+Two things changed in v0.2 and both matter more than the encode itself:
+
+* The encode goes to a staging path. Nothing is published until the result has
+  passed the readiness gate, so ``final.mp4`` cannot exist in a bad state.
+* A run containing any mock provider publishes ``mock_preview.mp4`` with a
+  burned-in MOCK PIPELINE label instead. It is never called final.
 """
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
-from ..domain import AssetLedger, AssetType, Manifest, PipelineState
+from ..domain import AssetLedger, AssetType, Manifest, PipelineState, ScenePlan
 from ..errors import MediaError, PipelineValidationError
 from ..media import compose, normalize_image, normalize_video, probe
-from ..pipeline.checkpoint import load_assets, require_manifest, save_project
+from ..pipeline.checkpoint import load_assets, require_manifest, require_scenes, save_project
 from ..pipeline.context import RunContext
-from ..quality import QAReport, check_clip, check_final_video
+from ..quality import QAReport, assess, check_clip, check_final_video
 from ..utils import atomic_write_model, relative_to
 from ._plan import StagePlan
 
 STAGE_NAME = "compose"
+
+MOCK_WATERMARK = "MOCK PIPELINE"
 
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
@@ -77,16 +88,37 @@ async def normalize_scene_clips(
     return clips
 
 
-def plan(context: RunContext) -> StagePlan:
-    return StagePlan(
-        stage=STAGE_NAME,
-        notes=["local ffmpeg work only, no paid calls"],
+def publish(context: RunContext, staged: Path, destination: Path) -> Path:
+    """Move the staged render into place and clear the counterpart output.
+
+    A stale ``final.mp4`` sitting next to a fresh ``mock_preview.mp4`` is exactly
+    the confusion this stage exists to prevent, so only one of them survives.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(staged), str(destination))
+    counterpart = (
+        context.workspace.mock_preview
+        if destination == context.workspace.final_video
+        else context.workspace.final_video
     )
+    if counterpart.exists():
+        counterpart.unlink()
+        context.log.info("stale_output_removed", path=str(counterpart))
+    return destination
+
+
+def plan(context: RunContext) -> StagePlan:
+    notes = ["local ffmpeg work only, no paid calls"]
+    if not context.production_ready:
+        notes.append("mock providers in use: this run can only produce mock_preview.mp4")
+    return StagePlan(stage=STAGE_NAME, notes=notes)
 
 
 async def run(context: RunContext) -> Path:
     manifest = require_manifest(context.workspace)
+    scene_plan: ScenePlan = require_scenes(context.workspace)
     ledger = load_assets(context.workspace)
+    production = context.production_ready
 
     clips = await normalize_scene_clips(context, manifest, ledger)
 
@@ -100,13 +132,13 @@ async def run(context: RunContext) -> Path:
         )
 
     voice = context.workspace.root / manifest.voice if manifest.voice else None
-    # Burn the styled ASS when it exists; fall back to the plain SRT.
     subtitle_ref = manifest.subtitle_burn or manifest.subtitle
     subtitle = context.workspace.root / subtitle_ref if subtitle_ref else None
 
-    output_path = await compose(
+    staged = context.workspace.work_dir / "render.mp4"
+    await compose(
         clips=clips,
-        destination=context.workspace.final_video,
+        destination=staged,
         total_duration_sec=manifest.total_duration_sec,
         work_dir=context.workspace.work_dir,
         output=context.settings.output,
@@ -115,20 +147,52 @@ async def run(context: RunContext) -> Path:
         voice_path=voice if voice and voice.exists() else None,
         bgm_path=context.bgm_path,
         subtitle_path=subtitle if subtitle and subtitle.exists() else None,
+        watermark=None if production else MOCK_WATERMARK,
     )
 
+    readiness = assess(
+        config=context.config,
+        providers=context.providers,
+        plan=scene_plan,
+        ledger=ledger,
+        video_path=staged,
+        voice_path=voice,
+    )
+    atomic_write_model(context.workspace.logs_dir / "production_readiness.json", readiness)
+
     final_report = QAReport(
-        issues=check_final_video(output_path, manifest.total_duration_sec, context.settings.output)
+        issues=check_final_video(staged, manifest.total_duration_sec, context.settings.output)
     )
     report.extend(final_report.issues)
     atomic_write_model(context.workspace.logs_dir / "technical_qa.json", report)
-    if not final_report.ok:
+
+    # Nothing is published until the picture and the sound are both real.
+    blocking = list(final_report.errors)
+    if not readiness.video_valid or not readiness.audio_valid:
+        staged.unlink(missing_ok=True)
         raise MediaError(
-            "final video failed technical QA:\n"
-            + "\n".join(issue.render() for issue in final_report.errors)
+            "render rejected before publishing:\n" + "\n".join(readiness.blocking_reasons)
+        )
+    if blocking:
+        staged.unlink(missing_ok=True)
+        raise MediaError(
+            "final video failed technical QA:\n" + "\n".join(issue.render() for issue in blocking)
+        )
+    if production and not readiness.ready:
+        staged.unlink(missing_ok=True)
+        raise MediaError(
+            "a production render may not be published:\n" + "\n".join(readiness.blocking_reasons)
         )
 
-    context.project.final_video_path = relative_to(output_path, context.workspace.root)
+    destination = context.workspace.output_video(production_ready=production)
+    output_path = publish(context, staged, destination)
+
+    if production:
+        context.project.final_video_path = relative_to(output_path, context.workspace.root)
+        context.project.preview_video_path = None
+    else:
+        context.project.preview_video_path = relative_to(output_path, context.workspace.root)
+        context.project.final_video_path = None
     context.project.cost_breakdown = context.tracker.summary()
     context.project.actual_cost_usd = context.tracker.total_usd()
     context.project.state = PipelineState.COMPOSED
@@ -137,7 +201,10 @@ async def run(context: RunContext) -> Path:
     context.log.info(
         "composition_completed",
         path=str(output_path),
+        production=production,
         duration=manifest.total_duration_sec,
         cost_usd=context.project.actual_cost_usd,
     )
+    for warning in readiness.warnings:
+        context.log.warning("production_warning", detail=warning)
     return output_path

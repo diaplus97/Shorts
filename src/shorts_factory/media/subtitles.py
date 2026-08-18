@@ -7,6 +7,7 @@ keeps text clear of the Shorts UI.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,6 +20,19 @@ from ..utils import (
     wrap_cue,
 )
 
+Position = Literal["bottom", "top"]
+
+
+class SubtitleSegment(BaseModel):
+    """One scene's worth of on-screen text and where it belongs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    start: float = Field(ge=0)
+    duration: float = Field(ge=0)
+    position: Position = "bottom"
+
 
 class SubtitleCue(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -27,6 +41,8 @@ class SubtitleCue(BaseModel):
     start: float = Field(ge=0)
     end: float = Field(gt=0)
     text: str
+    #: Moves the cue off important action (spec v0.2 section 40).
+    position: Position = "bottom"
 
     @property
     def duration(self) -> float:
@@ -96,21 +112,23 @@ def cues_for_segment(
 
 
 def build_cues(
-    segments: list[tuple[str, float, float]],
+    segments: list[SubtitleSegment],
     settings: SubtitleSettings,
 ) -> list[SubtitleCue]:
-    """``segments`` is ``(text, start, duration)`` in playback order."""
+    """Turn per-scene segments into numbered cues, in playback order."""
     cues: list[SubtitleCue] = []
-    for text, start, duration in segments:
-        if duration <= 0 or not text.strip():
+    for segment in segments:
+        if segment.duration <= 0 or not segment.text.strip():
             continue
-        for cue_start, cue_end, cue_text in cues_for_segment(text, start, duration, settings):
+        spans = cues_for_segment(segment.text, segment.start, segment.duration, settings)
+        for cue_start, cue_end, cue_text in spans:
             cues.append(
                 SubtitleCue(
                     index=len(cues) + 1,
                     start=cue_start,
                     end=cue_end,
                     text=cue_text,
+                    position=segment.position,
                 )
             )
     return cues
@@ -151,13 +169,9 @@ def render_ass(cues: list[SubtitleCue], settings: SubtitleSettings, width: int, 
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
             "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
             "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-            (
-                f"Style: Default,{settings.font_name},{settings.font_size},"
-                "&H00FFFFFF,&H000000FF,&H00101010,&H80000000,"
-                "-1,0,0,0,100,100,0,0,"
-                f"1,{settings.outline},{settings.shadow},2,"
-                f"{settings.margin_h},{settings.margin_h},{settings.margin_v},1"
-            ),
+            _style_line("Default", 2, settings),
+            # Alignment 8 anchors to the top, for shots whose action sits low.
+            _style_line("Top", 8, settings),
             "",
             "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -166,11 +180,22 @@ def render_ass(cues: list[SubtitleCue], settings: SubtitleSettings, width: int, 
     events = [
         (
             f"Dialogue: 0,{format_ass_timestamp(cue.start)},{format_ass_timestamp(cue.end)},"
-            f"Default,,0,0,0,,{cue.text.replace(chr(10), chr(92) + 'N')}"
+            f"{'Top' if cue.position == 'top' else 'Default'},,0,0,0,,"
+            f"{cue.text.replace(chr(10), chr(92) + 'N')}"
         )
         for cue in cues
     ]
     return header + "\n" + "\n".join(events) + "\n"
+
+
+def _style_line(name: str, alignment: int, settings: SubtitleSettings) -> str:
+    return (
+        f"Style: {name},{settings.font_name},{settings.font_size},"
+        "&H00FFFFFF,&H000000FF,&H00101010,&H80000000,"
+        "-1,0,0,0,100,100,0,0,"
+        f"1,{settings.outline},{settings.shadow},{alignment},"
+        f"{settings.margin_h},{settings.margin_h},{settings.margin_v},1"
+    )
 
 
 def write_ass(

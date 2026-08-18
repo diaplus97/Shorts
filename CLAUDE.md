@@ -23,4 +23,6 @@ enforced by tests, schema validation and CI:
 - paid API calls in tests are blocked by `assert_live_calls_allowed`,
 - unsourced claims are blocked by the fact lock,
 - cost overruns are blocked by the budget guard,
-- output format is checked with ffprobe.
+- output format is checked with ffprobe,
+- silent audio and mock providers are blocked by the production readiness gate,
+- scene/speech misalignment is blocked by the speech contract.

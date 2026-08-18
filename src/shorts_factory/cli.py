@@ -228,6 +228,16 @@ def write(
 
 
 @app.command()
+def speak(
+    project: Annotated[str, typer.Argument()],
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Break the narration into speech units and plan the pauses. No LLM call."""
+    _single_stage(project, Stage.SPEAK, dry_run, force)
+
+
+@app.command()
 def direct(
     project: Annotated[str, typer.Argument()],
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
@@ -257,6 +267,12 @@ def narrate(
     _single_stage(project, Stage.NARRATE, dry_run, force)
 
 
+def _mock_summary(context: RunContext) -> str:
+    from .quality import mock_provider_kinds
+
+    return ", ".join(mock_provider_kinds(context.providers))
+
+
 @app.command()
 def render(
     project: Annotated[str, typer.Argument()],
@@ -265,12 +281,40 @@ def render(
     ] = None,
     force: Annotated[bool, typer.Option("--force")] = False,
 ) -> None:
-    """Validate everything, then compose final.mp4."""
+    """Validate everything, then compose final.mp4 (real providers only)."""
     context, workspace = _context(project, force=force)
+    if not context.production_ready:
+        _fail(
+            f"this project uses mock providers ({_mock_summary(context)}), so it cannot "
+            "produce final.mp4. Run `shorts mock-render` for a watermarked preview, or "
+            "switch config/settings.yaml to real providers."
+        )
     context.bgm_path = str(bgm) if bgm is not None else None
     _run(run_stage(context, Stage.VALIDATE))
     _run(run_stage(context, Stage.COMPOSE))
     typer.secho(f"rendered {workspace.final_video}", fg=typer.colors.GREEN)
+    typer.echo(context.tracker.render_table())
+
+
+@app.command(name="mock-render")
+def mock_render(
+    project: Annotated[str, typer.Argument()],
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Compose a watermarked mock_preview.mp4. Never upload the result."""
+    context, workspace = _context(project, force=force)
+    if context.production_ready:
+        _fail(
+            "every provider is real, so this would be a production render.\n"
+            "Use `shorts render` instead."
+        )
+    typer.secho(
+        f"mock providers: {_mock_summary(context)} — output will be watermarked",
+        fg=typer.colors.YELLOW,
+    )
+    _run(run_stage(context, Stage.VALIDATE))
+    _run(run_stage(context, Stage.COMPOSE))
+    typer.secho(f"rendered {workspace.mock_preview}", fg=typer.colors.YELLOW)
     typer.echo(context.tracker.render_table())
 
 
@@ -285,6 +329,13 @@ def inspect(project: Annotated[str, typer.Argument()]) -> None:
     typer.echo(f"state        : {proj.state}")
     typer.echo(f"providers    : {proj.providers}")
     typer.echo(f"directory    : {workspace.root}")
+    if context.production_ready:
+        typer.secho("production   : real providers — will produce final.mp4", fg=typer.colors.GREEN)
+    else:
+        typer.secho(
+            f"production   : MOCK ({_mock_summary(context)}) — will produce mock_preview.mp4",
+            fg=typer.colors.YELLOW,
+        )
 
     script = load_script(workspace)
     if script is not None:
@@ -390,9 +441,16 @@ def status(
         typer.secho(line, fg=colour)
     typer.echo("")
     typer.echo(context.tracker.render_table())
+    typer.echo("")
     if proj.final_video_path:
-        typer.echo("")
-        typer.echo(f"final video: {workspace.root / proj.final_video_path}")
+        typer.secho(
+            f"final video  : {workspace.root / proj.final_video_path}", fg=typer.colors.GREEN
+        )
+    elif proj.preview_video_path:
+        typer.secho(
+            f"mock preview : {workspace.root / proj.preview_video_path} (not for upload)",
+            fg=typer.colors.YELLOW,
+        )
 
 
 @app.command()
@@ -417,6 +475,12 @@ def _print_result(context: RunContext, result) -> None:
         typer.secho(
             f"\nfinal video: {context.workspace.root / result.final_video_path}",
             fg=typer.colors.GREEN,
+        )
+    elif result.preview_video_path:
+        typer.secho(
+            f"\nmock preview: {context.workspace.root / result.preview_video_path} "
+            "(watermarked, not for upload)",
+            fg=typer.colors.YELLOW,
         )
 
 

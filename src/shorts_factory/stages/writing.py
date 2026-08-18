@@ -9,7 +9,7 @@ from __future__ import annotations
 from ..domain import ResearchResult, ScriptResult
 from ..pipeline.checkpoint import require_research, save_project, save_script
 from ..pipeline.context import RunContext
-from ..quality import QAIssue, check_script, check_script_traceability
+from ..quality import QAIssue, check_script, check_script_contract, check_script_traceability
 from ..utils import atomic_write_text, relative_to
 from ._llm import structured_call
 from ._plan import PlannedCall, StagePlan
@@ -21,10 +21,11 @@ def char_budget(context: RunContext) -> tuple[int, int, int]:
     """Narration length in non-whitespace characters: (target, min, max)."""
     script = context.settings.script
     rate = script.chars_per_sec
+    budget = script.pause_budget_sec
     return (
-        round(script.target_duration_sec * rate),
-        round(script.min_duration_sec * rate),
-        round(script.max_duration_sec * rate),
+        round(max(script.target_duration_sec - budget, 1) * rate),
+        round(max(script.min_duration_sec - budget, 1) * rate),
+        round(max(script.max_duration_sec - budget, 1) * rate),
     )
 
 
@@ -78,14 +79,32 @@ async def run(context: RunContext) -> ScriptResult:
     settings = context.settings
     target, minimum, maximum = char_budget(context)
 
+    contract = context.config.content_contract
+
     def _validate(result: ScriptResult) -> list[QAIssue]:
-        return check_script(result, settings) + check_script_traceability(result, research)
+        return [
+            *check_script(result, settings),
+            *check_script_traceability(result, research),
+            *check_script_contract(result, research, contract, settings.script),
+        ]
 
     script, prompt = await structured_call(
         context,
         prompt_name="writer",
         variables={
             "topic": context.project.topic,
+            "resolved_question": research.question.resolved_question,
+            "scope": research.question.scope,
+            "excluded": ", ".join(research.question.excluded) or "—",
+            "hook_max_seconds": contract.hook.max_seconds,
+            "hook_max_chars": round(contract.hook.max_seconds * settings.script.chars_per_sec),
+            "max_unit_chars": context.config.voice.speech.max_preferred_unit_chars,
+            "persona": context.config.voice.tone_profile.get("persona", "documentary"),
+            "formality": context.config.voice.tone_profile.get(
+                "formality", "polite_conversational"
+            ),
+            "max_generic_nouns": contract.script.max_generic_nouns,
+            "generic_nouns_json": contract.script.generic_nouns,
             "content_type": context.project.content_type,
             "target_duration_sec": settings.script.target_duration_sec,
             "min_duration_sec": settings.script.min_duration_sec,

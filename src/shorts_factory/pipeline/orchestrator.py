@@ -26,6 +26,7 @@ from ..stages import (
     fact_lock,
     narration,
     research,
+    speech,
     validation,
     writing,
 )
@@ -37,6 +38,7 @@ STAGE_MODULES = {
     Stage.RESEARCH: research,
     Stage.WRITE: writing,
     Stage.FACT_LOCK: fact_lock,
+    Stage.SPEAK: speech,
     Stage.DIRECT: directing,
     Stage.GENERATE: asset_generation,
     Stage.NARRATE: narration,
@@ -56,6 +58,7 @@ class PipelineResult(BaseModel):
     state: PipelineState
     total_cost_usd: float = 0.0
     final_video_path: str | None = None
+    preview_video_path: str | None = None
 
 
 def invalidate_downstream(project: Project, stage: Stage) -> None:
@@ -119,6 +122,7 @@ async def run_pipeline(context: RunContext, *, until: Stage | None = None) -> Pi
         state=context.project.state,
         total_cost_usd=context.tracker.total_usd(),
         final_video_path=context.project.final_video_path,
+        preview_video_path=context.project.preview_video_path,
     )
 
 

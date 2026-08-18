@@ -24,6 +24,7 @@ def color_for(seed: str) -> str:
 
 class MockImageProvider:
     name = "mock"
+    is_mock = True
 
     def __init__(self, model: str = "mock-image-1") -> None:
         self.model = model

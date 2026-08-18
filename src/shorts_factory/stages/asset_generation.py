@@ -203,9 +203,11 @@ async def generate_image_asset(
     )
 
 
-async def generate_scene(context: RunContext, scene: Scene, ledger: AssetLedger) -> AssetRecord:
+async def generate_scene(
+    context: RunContext, scene: Scene, ledger: AssetLedger, plan: ScenePlan
+) -> AssetRecord:
     adapter = context.providers.prompt_adapter
-    prompt = adapter.build_prompt(scene)
+    prompt = adapter.build_prompt(scene, plan)
     negative = adapter.build_negative_prompt(scene)
 
     hashes = {
@@ -279,7 +281,7 @@ def plan(context: RunContext) -> StagePlan:
     notes: list[str] = []
 
     for scene in scene_plan.scenes:
-        prompt = adapter.build_prompt(scene)
+        prompt = adapter.build_prompt(scene, scene_plan)
         negative = adapter.build_negative_prompt(scene)
         hashes = {
             video_hash(context, scene, prompt, negative),
@@ -324,7 +326,7 @@ async def run(context: RunContext) -> AssetLedger:
     ledger = load_assets(context.workspace)
 
     for scene in scene_plan.scenes:
-        record = await generate_scene(context, scene, ledger)
+        record = await generate_scene(context, scene, ledger, scene_plan)
         ledger.put(record)
         # Checkpoint after every scene so a crash never loses a paid asset.
         save_assets(context.workspace, ledger)

@@ -19,6 +19,7 @@ _PUBLISHERS = (
 
 class MockSearchProvider:
     name = "mock"
+    is_mock = True
 
     def __init__(self, results_per_query: int = 4) -> None:
         self.results_per_query = results_per_query

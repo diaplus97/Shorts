@@ -4,14 +4,22 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .enums import BeatPurpose
+
 
 class ScriptBeat(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    purpose: str
+    purpose: BeatPurpose
     text: str
     claim_ids: list[str] = Field(default_factory=list)
+
+    #: Can this sentence be shown in a single shot? A sentence that cannot be
+    #: shown does not belong in a video script (spec v0.2 section 13.1).
+    visualizable: bool = False
+    #: What the viewer sees while this sentence is spoken.
+    visual_payoff: str | None = None
 
 
 class ScriptResult(BaseModel):
@@ -24,6 +32,7 @@ class ScriptResult(BaseModel):
     narration: str
     beats: list[ScriptBeat] = Field(default_factory=list)
     target_duration_sec: float = Field(gt=0)
+    resolved_question: str = ""
     referenced_claim_ids: list[str] = Field(default_factory=list)
     estimated_word_count: int = Field(ge=0, default=0)
 

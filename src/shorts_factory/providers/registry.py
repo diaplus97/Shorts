@@ -7,6 +7,7 @@ provider per kind is wired up (spec section 22).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from ..config import AppConfig
 from ..errors import ConfigError
@@ -32,15 +33,29 @@ class ProviderSet:
     tts: TTSProvider
     prompt_adapter: VideoPromptAdapter
 
-    def names(self) -> dict[str, str]:
+    def as_dict(self) -> dict[str, Any]:
+        """The five generation providers, keyed by kind."""
         return {
-            "llm": self.llm.name,
-            "search": self.search.name,
-            "image": self.image.name,
-            "video": self.video.name,
-            "tts": self.tts.name,
-            "prompt_adapter": self.prompt_adapter.name,
+            "llm": self.llm,
+            "search": self.search,
+            "image": self.image,
+            "video": self.video,
+            "tts": self.tts,
         }
+
+    def names(self) -> dict[str, str]:
+        names = {kind: provider.name for kind, provider in self.as_dict().items()}
+        names["prompt_adapter"] = self.prompt_adapter.name
+        return names
+
+    @property
+    def has_mock(self) -> bool:
+        return any(provider.is_mock for provider in self.as_dict().values())
+
+    @property
+    def production_ready(self) -> bool:
+        """False whenever any output would be a stand-in rather than the real thing."""
+        return not self.has_mock
 
 
 def build_llm(config: AppConfig) -> LLMProvider:

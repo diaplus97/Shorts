@@ -1,18 +1,47 @@
-# Shared look-and-feel applied by the provider prompt adapters.
+# Style Bible (spec v0.2 section 19.1).
+#
+# Text-to-video models reach for glowing holograms and floating UI the moment a
+# prompt sounds technical. This file exists mainly to push back on that: the
+# `avoid` list is applied to every scene as a negative prompt, regardless of
+# what the director wrote.
 
-default:
-  base_style: >
-    cinematic documentary photography, physically plausible materials,
-    natural volumetric lighting, shallow depth of field, 9:16 vertical framing,
-    subject centred in the safe area
-  color_grade: "neutral contrast, slightly cool shadows, warm practical lights"
-  motion: "slow deliberate camera movement, no shaky handheld"
-  negative_constraints:
-    - visible text
+style:
+  genre: documentary CGI
+  realism:
+    photorealistic: true
+    physically_plausible: true
+  palette:
+    - industrial
+    - neutral
+    - desaturated
+  camera:
+    - smooth
+    - cinematic
+    - physically possible camera motion
+  lighting:
+    - practical light sources
+    - soft directional key
+    - no artificial rim glow
+  transitions:
+    - match cut
+    - continuous tracking
+    - cutaway reveal
+    - macro push-in
+  avoid:
+    - fantasy glow
+    - sci-fi holograms
+    - holographic projection
+    - floating UI panels
+    - random UI overlays
+    - floating labels
+    - generated text
     - captions
     - watermarks
     - logos
     - brand names
+    - excessive lens flare
+    - glowing data streams
+    - neon blue circuitry
     - distorted human hands
     - extra limbs
     - uncanny faces
@@ -23,8 +52,8 @@ reality_type_style:
   reconstructed:
     suffix: >
       technical cutaway reconstruction, engineering-accurate proportions,
-      clean sectional view
+      clean sectional view, real materials and surfaces
   conceptual:
     suffix: >
-      explanatory abstract visualisation, clearly stylised and diagrammatic so it
-      is not mistaken for real internal footage
+      explanatory diagrammatic visualisation, flat graphic treatment, clearly
+      stylised so it is not mistaken for real internal footage

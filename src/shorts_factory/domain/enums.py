@@ -27,6 +27,21 @@ class ScenePriority(StrEnum):
     LOW = "low"
 
 
+class BeatPurpose(StrEnum):
+    """Where a narration beat sits in the 45-70s arc (spec v0.2 section 14)."""
+
+    HOOK = "hook"
+    REVEAL = "reveal"
+    PROCESS = "process"
+    SURPRISE = "surprise"
+    CLOSING = "closing"
+    TRANSITION = "transition"
+
+
+#: Beats that may carry no claim id, because they assert no fact.
+NON_FACTUAL_PURPOSES = frozenset({BeatPurpose.HOOK, BeatPurpose.CLOSING, BeatPurpose.TRANSITION})
+
+
 class ClaimConfidence(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
@@ -62,6 +77,7 @@ class PipelineState(StrEnum):
     RESEARCHED = "researched"
     SCRIPTED = "scripted"
     FACT_LOCKED = "fact_locked"
+    SPOKEN = "spoken"
     DIRECTED = "directed"
     ASSETS_READY = "assets_ready"
     AUDIO_READY = "audio_ready"
@@ -77,6 +93,7 @@ class Stage(StrEnum):
     RESEARCH = "research"
     WRITE = "write"
     FACT_LOCK = "fact_lock"
+    SPEAK = "speak"
     DIRECT = "direct"
     GENERATE = "generate"
     NARRATE = "narrate"
@@ -89,6 +106,7 @@ STAGE_ORDER: tuple[Stage, ...] = (
     Stage.RESEARCH,
     Stage.WRITE,
     Stage.FACT_LOCK,
+    Stage.SPEAK,
     Stage.DIRECT,
     Stage.GENERATE,
     Stage.NARRATE,
@@ -101,6 +119,7 @@ STAGE_COMPLETION_STATE: dict[Stage, PipelineState] = {
     Stage.RESEARCH: PipelineState.RESEARCHED,
     Stage.WRITE: PipelineState.SCRIPTED,
     Stage.FACT_LOCK: PipelineState.FACT_LOCKED,
+    Stage.SPEAK: PipelineState.SPOKEN,
     Stage.DIRECT: PipelineState.DIRECTED,
     Stage.GENERATE: PipelineState.ASSETS_READY,
     Stage.NARRATE: PipelineState.AUDIO_READY,

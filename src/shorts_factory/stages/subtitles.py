@@ -1,33 +1,56 @@
-"""Subtitle stage (spec section 40).
+"""Subtitle stage (spec v0.3 sections 26-27).
 
-Cues are derived from scene narration and the final scene timings, so a cue can
-never drift away from the picture it belongs to.
+Captions are built from speech units, not by re-cutting a narration string. A
+unit is one breath and one idea, which is exactly the right size for a caption,
+so a cue can never change in the middle of a thought.
+
+A unit longer than the cue box still gets wrapped onto two lines, but it is
+never split into two cues with different timings.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from ..domain import Manifest, ScenePlan
-from ..media import SubtitleCue, build_cues, write_ass, write_srt
+from ..domain import ScenePlan, SpeechPlan, SpeechTimeline
+from ..media import SubtitleCue, write_ass, write_srt
 from ..pipeline.context import RunContext
+from ..utils import wrap_cue
 
 STAGE_NAME = "subtitles"
 
 
-def segments_from(plan: ScenePlan, manifest: Manifest) -> list[tuple[str, float, float]]:
-    by_id = {scene.scene_id: scene for scene in manifest.scenes}
-    segments: list[tuple[str, float, float]] = []
-    for scene in plan.scenes:
-        entry = by_id.get(scene.id)
-        if entry is None:
+def build(
+    context: RunContext,
+    plan: ScenePlan,
+    speech: SpeechPlan,
+    timeline: SpeechTimeline,
+) -> list[SubtitleCue]:
+    """One cue per speech unit, timed by measurement and placed by its scene."""
+    settings = context.settings.subtitles
+    position_by_unit = {
+        unit_id: scene.subtitle_position
+        for scene in plan.scenes
+        for unit_id in scene.speech_unit_ids
+    }
+
+    cues: list[SubtitleCue] = []
+    for unit in speech.units:
+        entry = timeline.entry_for(unit.id)
+        if entry is None or entry.duration <= 0 or not unit.text.strip():
             continue
-        segments.append((scene.narration, entry.start, entry.duration))
-    return segments
-
-
-def build(context: RunContext, plan: ScenePlan, manifest: Manifest) -> list[SubtitleCue]:
-    return build_cues(segments_from(plan, manifest), context.settings.subtitles)
+        cues.append(
+            SubtitleCue(
+                index=len(cues) + 1,
+                start=entry.start,
+                # Hold the cue through the pause that follows, so text does not
+                # flash off during a deliberate silence.
+                end=round(entry.end + entry.gap_after, 3),
+                text=wrap_cue(unit.text, settings.max_chars_per_line, settings.max_lines),
+                position=position_by_unit.get(unit.id, "bottom"),
+            )
+        )
+    return cues
 
 
 def write(context: RunContext, cues: list[SubtitleCue]) -> tuple[Path, Path]:

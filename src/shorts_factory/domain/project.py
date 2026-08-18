@@ -65,12 +65,16 @@ class Project(BaseModel):
 
     research_path: str | None = None
     script_path: str | None = None
+    speech_path: str | None = None
     scenes_path: str | None = None
     assets_path: str | None = None
     audio_path: str | None = None
     subtitle_path: str | None = None
     manifest_path: str | None = None
+    #: Set only by a production render; a mock run leaves this None.
     final_video_path: str | None = None
+    #: Set by a mock run. Never upload this.
+    preview_video_path: str | None = None
 
     providers: dict[str, str] = Field(default_factory=dict)
     prompt_versions: dict[str, str] = Field(default_factory=dict)

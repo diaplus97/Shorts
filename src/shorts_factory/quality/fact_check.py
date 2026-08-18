@@ -10,11 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..domain import ResearchResult, ScenePlan, ScriptResult
+from ..domain import NON_FACTUAL_PURPOSES, ResearchResult, ScenePlan, ScriptResult
 from .report import QAIssue, error, warning
-
-#: Beat purposes that are allowed to carry no claim id.
-NON_FACTUAL_PURPOSES = frozenset({"hook", "closing", "transition", "question"})
 
 
 class FactCheckFinding(BaseModel):

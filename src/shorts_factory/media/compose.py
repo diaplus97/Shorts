@@ -50,16 +50,39 @@ def build_audio_filter(
     )
 
 
-def build_video_filter(subtitle_path: Path | None, subtitles: SubtitleSettings) -> str:
-    if subtitle_path is None or not subtitles.burn_in:
+def build_watermark_filter(text: str, font_name: str) -> str:
+    """Top-left burned-in label. Used to mark a run that is not production."""
+    escaped = text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "")
+    return (
+        f"drawtext=text='{escaped}':font='{font_name}':fontsize=44:fontcolor=white@0.92"
+        ":x=48:y=48:box=1:boxcolor=black@0.55:boxborderw=18"
+    )
+
+
+def build_video_filter(
+    subtitle_path: Path | None,
+    subtitles: SubtitleSettings,
+    watermark: str | None = None,
+    watermark_font: str = "DejaVu Sans",
+) -> str:
+    stages: list[str] = []
+    if subtitle_path is not None and subtitles.burn_in:
+        stages.append(_subtitle_filter(subtitle_path, subtitles))
+    if watermark:
+        stages.append(build_watermark_filter(watermark, watermark_font))
+    if not stages:
         return "[0:v]null[v]"
+    return "[0:v]" + ",".join(stages) + "[v]"
+
+
+def _subtitle_filter(subtitle_path: Path, subtitles: SubtitleSettings) -> str:
     escaped = escape_filter_path(subtitle_path.resolve())
     if subtitle_path.suffix.lower() == ".ass":
         # The ASS file carries its own PlayRes and style; force_style here would
         # reintroduce the script-unit confusion it was written to avoid.
-        return f"[0:v]subtitles='{escaped}'[v]"
+        return f"subtitles='{escaped}'"
     style = force_style(subtitles).replace("'", "")
-    return f"[0:v]subtitles='{escaped}':force_style='{style}'[v]"
+    return f"subtitles='{escaped}':force_style='{style}'"
 
 
 async def compose(
@@ -74,6 +97,7 @@ async def compose(
     voice_path: str | Path | None = None,
     bgm_path: str | Path | None = None,
     subtitle_path: str | Path | None = None,
+    watermark: str | None = None,
 ) -> Path:
     """Stitch normalised clips, audio and subtitles into the final MP4."""
     target = Path(destination)
@@ -107,7 +131,12 @@ async def compose(
 
     filter_complex = ";".join(
         [
-            build_video_filter(Path(subtitle_path) if subtitle_path else None, subtitles),
+            build_video_filter(
+                Path(subtitle_path) if subtitle_path else None,
+                subtitles,
+                watermark=watermark,
+                watermark_font=subtitles.font_name,
+            ),
             build_audio_filter(
                 voice_index=voice_index,
                 bgm_index=bgm_index,

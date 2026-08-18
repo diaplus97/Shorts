@@ -36,6 +36,7 @@ class MockVideoProvider:
     """
 
     name: str = "mock"
+    is_mock: bool = True
     model: str = "mock-video-1"
     width: int = 1080
     height: int = 1920

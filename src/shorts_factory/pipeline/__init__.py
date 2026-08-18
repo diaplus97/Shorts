@@ -7,12 +7,16 @@ from .checkpoint import (
     load_research,
     load_scenes,
     load_script,
+    load_speech_plan,
+    load_speech_timeline,
     save_assets,
     save_manifest,
     save_project,
     save_research,
     save_scenes,
     save_script,
+    save_speech_plan,
+    save_speech_timeline,
 )
 from .context import RunContext, build_context
 from .orchestrator import (
@@ -45,6 +49,8 @@ __all__ = [
     "load_research",
     "load_scenes",
     "load_script",
+    "load_speech_plan",
+    "load_speech_timeline",
     "plan_pipeline",
     "projects_root",
     "resolve_workspace",
@@ -56,5 +62,7 @@ __all__ = [
     "save_research",
     "save_scenes",
     "save_script",
+    "save_speech_plan",
+    "save_speech_timeline",
     "total_estimated_cost",
 ]

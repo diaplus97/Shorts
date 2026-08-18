@@ -17,9 +17,12 @@ SOURCES_JSON:
 Produce a `ResearchResult` object with these fields:
 
 - `topic`: echo the topic verbatim.
-- `summary`: 3-5 Korean sentences explaining how the system actually works.
+- `question`: `{ original_topic, resolved_question, scope, excluded }` — the
+  normalisation described in your instructions.
+- `summary`: 3-5 Korean sentences explaining how this specific mechanism works,
+  naming real parts.
 - `claims`: about {{target_claims}} atomic claims, ids `C01`, `C02`, ...
-  Each claim needs `statement`, `confidence`, `source_ids`, `visualizable`.
+  Each needs `statement`, `confidence`, `source_ids`, `visualizable`.
 - `sources`: echo back every source you cited, unchanged.
 - `unresolved_questions`: what you could not confirm from these sources.
 - `unsafe_or_uncertain_claims`: statements that sounded plausible but that the

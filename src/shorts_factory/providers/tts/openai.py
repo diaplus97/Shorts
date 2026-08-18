@@ -19,6 +19,7 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 class OpenAITTSProvider:
     name = "openai"
+    is_mock = False
 
     def __init__(
         self,
