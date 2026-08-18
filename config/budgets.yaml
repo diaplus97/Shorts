@@ -1,0 +1,42 @@
+# Cost limits and unit prices.
+#
+# NUMBERS BELOW ARE PLACEHOLDERS.
+# Before connecting a real provider, replace them with that provider's current
+# official pricing. Never hardcode prices in Python (spec section 29).
+
+project:
+  max_total_usd: 12.00
+
+video:
+  max_scene_attempts: 3
+  max_high_priority_scenes: 4
+
+image:
+  max_scene_attempts: 2
+
+llm:
+  max_calls: 15
+
+# Unit prices used by the cost estimator and the budget guard.
+pricing:
+  llm:
+    mock:
+      input_usd_per_1k_tokens: 0.0
+      output_usd_per_1k_tokens: 0.0
+    openai:
+      input_usd_per_1k_tokens: 0.00015
+      output_usd_per_1k_tokens: 0.0006
+  search:
+    mock:
+      usd_per_query: 0.0
+  image:
+    mock:
+      usd_per_image: 0.0
+  video:
+    mock:
+      usd_per_second: 0.0
+  tts:
+    mock:
+      usd_per_1k_chars: 0.0
+    openai:
+      usd_per_1k_chars: 0.015

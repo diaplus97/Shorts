@@ -1,0 +1,30 @@
+# Shared look-and-feel applied by the provider prompt adapters.
+
+default:
+  base_style: >
+    cinematic documentary photography, physically plausible materials,
+    natural volumetric lighting, shallow depth of field, 9:16 vertical framing,
+    subject centred in the safe area
+  color_grade: "neutral contrast, slightly cool shadows, warm practical lights"
+  motion: "slow deliberate camera movement, no shaky handheld"
+  negative_constraints:
+    - visible text
+    - captions
+    - watermarks
+    - logos
+    - brand names
+    - distorted human hands
+    - extra limbs
+    - uncanny faces
+
+reality_type_style:
+  observed:
+    suffix: "shot as real-world documentary footage"
+  reconstructed:
+    suffix: >
+      technical cutaway reconstruction, engineering-accurate proportions,
+      clean sectional view
+  conceptual:
+    suffix: >
+      explanatory abstract visualisation, clearly stylised and diagrammatic so it
+      is not mistaken for real internal footage

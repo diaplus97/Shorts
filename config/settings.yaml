@@ -1,0 +1,113 @@
+# Non-secret runtime configuration.
+# Secrets belong in .env (see .env.example).
+
+project_root: projects
+
+providers:
+  llm: mock          # mock | openai
+  search: mock       # mock
+  image: mock        # mock
+  video: mock        # mock
+  tts: mock          # mock | openai
+
+llm:
+  model: gpt-4o-mini
+  temperature: 0.4
+  max_output_tokens: 8000
+  timeout_sec: 120
+  # A structured-output failure is retried exactly once with the validation
+  # error appended to the prompt. Never loop forever (spec section 65).
+  structured_output_retries: 1
+
+search:
+  max_queries: 6
+  max_results_per_query: 6
+
+research:
+  target_claims: 10
+
+quality:
+  # Structural QA always runs. The LLM fact-check prompt is opt-in because it
+  # costs money and the structural checks catch most problems.
+  llm_fact_check: false
+  strict: false
+
+video:
+  model: mock-video-1
+  aspect_ratio: "9:16"
+  # Mock jobs finish immediately; real video jobs take minutes, so raise this
+  # (and poll_timeout_sec) when you wire a real provider.
+  poll_interval_sec: 2
+  poll_timeout_sec: 900
+  max_clip_duration_sec: 8.0
+
+image:
+  model: mock-image-1
+  width: 1080
+  height: 1920
+
+tts:
+  model: mock-tts-1
+  voice: default
+  format: wav
+  sample_rate: 24000
+
+script:
+  target_duration_sec: 58
+  min_duration_sec: 45
+  max_duration_sec: 70
+  # Rough speaking rate used for duration estimation before TTS exists.
+  # Korean narration, measured in characters per second.
+  chars_per_sec: 6.2
+
+scenes:
+  min_scenes: 8
+  max_scenes: 14
+  min_scene_duration_sec: 1.5
+  max_scene_duration_sec: 9.0
+
+subtitles:
+  max_lines: 2
+  # Korean glyphs are roughly one font_size wide, so this must fit inside
+  # (width - 2 * margin_h) / font_size.
+  max_chars_per_line: 15
+  min_cue_duration_sec: 0.8
+  # Output pixels. margin_v keeps cues clear of the Shorts UI safe area.
+  margin_v: 320
+  margin_h: 60
+  font_size: 64
+  outline: 4
+  shadow: 1
+  # Must be a font installed on this machine that can render Korean.
+  font_name: "Noto Sans CJK KR"
+  burn_in: true
+
+output:
+  width: 1080
+  height: 1920
+  fps: 30
+  video_codec: libx264
+  video_preset: medium
+  video_crf: 20
+  pixel_format: yuv420p
+  audio_codec: aac
+  audio_bitrate: 192k
+  audio_sample_rate: 48000
+  # Silence appended after the narration so the last scene is not clipped.
+  tail_padding_sec: 0.4
+
+audio:
+  voice_gain_db: 0.0
+  bgm_gain_db: -18.0
+  # Ducking is only applied when a BGM track is supplied.
+  duck_ratio: 8
+  duck_threshold: 0.05
+
+retry:
+  provider_max_attempts: 4
+  provider_backoff_initial_sec: 2.0
+  provider_backoff_max_sec: 30.0
+
+logging:
+  level: INFO
+  json_file: logs/pipeline.jsonl
