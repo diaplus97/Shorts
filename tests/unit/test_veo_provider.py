@@ -86,8 +86,59 @@ async def test_submit_sends_the_documented_request() -> None:
     assert params["negativePrompt"] == "text, logos"
     # 3.3s is not a length Veo returns; the request rounds up to 4.
     assert params["durationSeconds"] == 4
-    # We mix our own narration, so Veo's audio is off.
-    assert params["generateAudio"] is False
+    # Veo 3.1 rejects generateAudio outright, so by default it is never sent.
+    assert "generateAudio" not in params
+
+
+async def test_generate_audio_is_sent_only_when_set() -> None:
+    """Veo 3.1 answers HTTP 400 to the field, so ``None`` must omit it entirely.
+
+    A model that does document the parameter still has to be able to receive it,
+    hence the explicit-value case.
+    """
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"name": OPERATION})
+
+    for value, expected in ((None, None), (False, False), (True, True)):
+        veo = provider(handler, generate_audio=value)
+        await veo.submit(prompt="a stack of notes", duration_sec=4.0, aspect_ratio="9:16")
+        params = seen["body"]["parameters"]
+        if expected is None:
+            assert "generateAudio" not in params
+        else:
+            assert params["generateAudio"] is expected
+
+
+async def test_invalid_argument_is_not_retryable() -> None:
+    """The real 400 Veo 3.1 returns for an unsupported field.
+
+    It is not a content block and not transient: the same body fails the same
+    way every time, so the scene loop must be told not to spend more attempts.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "code": 400,
+                    "message": (
+                        "`generateAudio` isn't supported by this model. Please remove "
+                        "it or refer to the Gemini API documentation for supported usage."
+                    ),
+                    "status": "INVALID_ARGUMENT",
+                }
+            },
+        )
+
+    veo = provider(handler, generate_audio=False)
+    with pytest.raises(ProviderError) as caught:
+        await veo.submit(prompt="a stack of notes", duration_sec=4.0, aspect_ratio="9:16")
+    assert not isinstance(caught.value, ContentBlockedError)
+    assert caught.value.retryable is False
 
 
 async def test_extra_parameters_pass_through() -> None:

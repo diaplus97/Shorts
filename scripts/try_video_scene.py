@@ -43,6 +43,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scene", help="Scene id. Defaults to the first video scene.")
     parser.add_argument("--config-dir", default=None, help="Directory of YAML config files.")
     parser.add_argument("--yes", action="store_true", help="Skip the cost confirmation.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate even if this scene already has a usable asset. "
+        "Needed to retry a scene that fell back to a still image.",
+    )
     return parser.parse_args()
 
 
@@ -60,6 +66,7 @@ async def main() -> int:
         project=project,
         workspace=workspace,
         providers=build_providers(config),
+        force=args.force,
     )
 
     plan = require_scenes(workspace)

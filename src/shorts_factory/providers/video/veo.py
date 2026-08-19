@@ -63,7 +63,7 @@ class VeoVideoProvider:
         sample_count: int = 1,
         person_generation: str | None = "allow_adult",
         resolution: str | None = "1080p",
-        generate_audio: bool = False,
+        generate_audio: bool | None = None,
         extra_parameters: dict[str, Any] | None = None,
         timeout_sec: float = 120.0,
         download_timeout_sec: float = 600.0,
@@ -116,9 +116,14 @@ class VeoVideoProvider:
             "aspectRatio": aspect_ratio,
             "durationSeconds": int(snapped),
             "sampleCount": self.sample_count,
-            # We mix our own narration; Veo's audio would only fight it.
-            "generateAudio": self.generate_audio,
         }
+        # Veo 3.1 generates audio natively and rejects the field outright
+        # ("`generateAudio` isn't supported by this model", HTTP 400), while
+        # earlier revisions required it. None means "do not send it at all",
+        # which is the only setting Veo 3.1 accepts. We strip the audio at
+        # normalisation regardless, so our own narration is never fought.
+        if self.generate_audio is not None:
+            parameters["generateAudio"] = self.generate_audio
         if negative_prompt:
             parameters["negativePrompt"] = negative_prompt
         if self.person_generation:

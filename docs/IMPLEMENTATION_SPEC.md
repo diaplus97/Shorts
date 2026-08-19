@@ -3427,13 +3427,27 @@ Veo는 고정 길이 클립을 돌려준다. 3.3초를 요청하는 개념이 �
 3.29s 요청 → 4s 청구 → normalize가 3.29s로 트림
 ```
 
-## F.2 Veo는 자기 오디오를 만든다
+## F.2 Veo 3.1은 `generateAudio`를 아예 받지 않는다
 
-`generateAudio: false`로 요청한다. 우리는 내레이션을 따로 믹스하고, 정규화 단계가
-`-an`으로 어차피 오디오를 버린다.
+2026-08-19 실제 호출로 확인:
 
-**비용 때문이 아니다.** Google 단가는 오디오 포함 가격이고 끈다고 싸지지 않는다.
-끄는 이유는 Veo의 오디오가 우리 내레이션과 충돌하기 때문이다.
+```text
+HTTP 400 INVALID_ARGUMENT
+`generateAudio` isn't supported by this model. Please remove it or refer to
+the Gemini API documentation for supported usage.
+```
+
+Veo 3.1은 오디오 생성이 네이티브라 켜고 끄는 파라미터가 아니다. `false`를 보내도
+400이다. 따라서 `video.generate_audio`는 3항 값이다:
+
+| 값 | 요청 |
+|---|---|
+| 비움(`None`) | 필드를 **보내지 않음** — Veo 3.1이 받는 유일한 형태. 기본값 |
+| `false` / `true` | 필드를 그대로 전송 — 파라미터를 문서화한 모델 전용 |
+
+우리 내레이션과 충돌할 걱정은 없다. 정규화 단계가 `-an`으로 클립 오디오를 버린다.
+
+**비용과도 무관하다.** Google 단가는 오디오 포함 가격이라 어느 쪽이든 같다.
 
 ## F.3 정책 거부는 일시적 실패가 아니다
 

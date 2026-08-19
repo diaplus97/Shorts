@@ -102,7 +102,15 @@ async def poll_until_done(context: RunContext, job_id: str) -> None:
                     provider=video.name,
                     reason=reason,
                 )
-            raise ProviderError(f"video job {job_id} failed: {reason}", provider=video.name)
+            # The job was accepted and generation started, so a failure here can
+            # be transient -- that is what the scene attempt budget is for. A
+            # request the API rejects outright is a different case and is marked
+            # non-retryable by the provider.
+            raise ProviderError(
+                f"video job {job_id} failed: {reason}",
+                provider=video.name,
+                retryable=True,
+            )
         if waited >= settings.poll_timeout_sec:
             raise ProviderError(
                 f"video job {job_id} still {state.state} after {waited:.0f}s",
@@ -271,6 +279,10 @@ async def generate_scene(
                     )
                 )
                 save_assets(context.workspace, ledger)
+                if not exc.retryable:
+                    # A malformed or rejected request fails identically every
+                    # time; three attempts only delay the fallback.
+                    break
                 continue
             else:
                 record.attempt = attempt

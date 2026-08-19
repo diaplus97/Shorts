@@ -82,7 +82,6 @@ async def test_veo_generates_a_clip(tmp_path: Path, config) -> None:
         base_url=video.base_url,
         allowed_durations=tuple(video.allowed_durations) or (4.0, 6.0, 8.0),
         resolution=video.resolution,
-        generate_audio=False,
     )
 
     job = await provider.submit(

@@ -108,7 +108,7 @@ class VideoSettings(BaseModel):
     person_generation: str | None = "allow_adult"
     resolution: str | None = "1080p"
     #: Veo generates its own audio; we mix our own narration instead.
-    generate_audio: bool = False
+    generate_audio: bool | None = None
     timeout_sec: float = 120.0
     download_timeout_sec: float = 600.0
     #: Escape hatch for a request field this code does not know about.
