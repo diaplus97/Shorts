@@ -119,7 +119,7 @@ async def generate_video_asset(
     """One paid video attempt. Raises on failure; the caller decides what next."""
     video = context.providers.video
     seconds = requested_video_seconds(context, scene)
-    estimated = context.guard.estimate_video_usd(video.name, seconds)
+    estimated = context.guard.estimate_video_usd(video.name, seconds, video.model)
 
     context.guard.check_video_attempt(scene.id)
     context.guard.check_total(estimated, operation=f"video:{scene.id}")
@@ -318,7 +318,7 @@ def plan(context: RunContext) -> StagePlan:
                     provider=context.providers.video.name,
                     operation="generate_video",
                     estimated_cost_usd=context.guard.estimate_video_usd(
-                        context.providers.video.name, seconds
+                        context.providers.video.name, seconds, context.providers.video.model
                     ),
                     detail=f"{scene.id} ({scene.priority}, {seconds:.1f}s): {prompt[:110]}",
                 )

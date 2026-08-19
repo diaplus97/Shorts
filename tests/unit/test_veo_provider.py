@@ -294,3 +294,35 @@ def test_block_reasons_are_found_wherever_they_sit() -> None:
     assert find_block_reason({"a": {"raiFilteredReason": "x"}}) == "raiFilteredReason: x"
     assert find_block_reason({"a": [{"blockedReason": "y"}]}) == "blockedReason: y"
     assert find_block_reason({"a": {"b": 1}}) is None
+
+
+def test_retired_model_ids_are_refused() -> None:
+    """Veo 2 and Veo 3 were shut down on 2026-06-30; a 404 mid-run is a worse teacher."""
+    from shorts_factory.config import load_config
+    from shorts_factory.errors import ConfigError
+    from shorts_factory.providers.registry import RETIRED_VIDEO_MODELS, build_video
+
+    config = load_config(Path(__file__).resolve().parents[2] / "config", load_env=False)
+    config.settings.providers.video = "veo"
+    config.settings.video.allowed_durations = [4, 6, 8]
+
+    assert "veo-3.0-generate-001" in RETIRED_VIDEO_MODELS
+    config.settings.video.model = "veo-3.0-generate-001"
+    with pytest.raises(ConfigError, match="shut down"):
+        build_video(config)
+
+    config.settings.video.model = "veo-3.1-fast-generate-preview"
+    assert build_video(config).model == "veo-3.1-fast-generate-preview"
+
+
+def test_veo_needs_explicit_clip_lengths() -> None:
+    from shorts_factory.config import load_config
+    from shorts_factory.errors import ConfigError
+    from shorts_factory.providers.registry import build_video
+
+    config = load_config(Path(__file__).resolve().parents[2] / "config", load_env=False)
+    config.settings.providers.video = "veo"
+    config.settings.video.model = "veo-3.1-fast-generate-preview"
+    config.settings.video.allowed_durations = []
+    with pytest.raises(ConfigError, match="allowed_durations"):
+        build_video(config)

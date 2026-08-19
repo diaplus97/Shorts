@@ -94,6 +94,16 @@ def build_image(config: AppConfig) -> ImageProvider:
     )
 
 
+#: Video model ids Google shut down on 2026-06-30. Failing here beats a 404
+#: halfway through a paid run.
+RETIRED_VIDEO_MODELS = {
+    "veo-2.0-generate-001",
+    "veo-3.0-generate-001",
+    "veo-3.0-fast-generate-001",
+    "veo-3.0-generate-preview",
+}
+
+
 def build_video(config: AppConfig) -> VideoProvider:
     name = config.settings.providers.video
     video = config.settings.video
@@ -105,6 +115,12 @@ def build_video(config: AppConfig) -> VideoProvider:
             fps=config.settings.output.fps,
         )
     if name == "veo":
+        if video.model in RETIRED_VIDEO_MODELS:
+            raise ConfigError(
+                f"video.model '{video.model}' was shut down on 2026-06-30. "
+                "Use a Veo 3.1 id such as 'veo-3.1-fast-generate-preview', and "
+                "check config/budgets.yaml has a rate for it."
+            )
         if not video.allowed_durations:
             raise ConfigError(
                 "video.allowed_durations is empty, but Veo only returns fixed-length "

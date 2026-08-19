@@ -100,3 +100,25 @@ def test_estimated_cost_is_used_when_actual_is_unknown(tracker: CostTracker) -> 
 def test_unknown_cost_kind_is_rejected(tracker: CostTracker) -> None:
     with pytest.raises(ValueError, match="unknown cost kind"):
         tracker.record(CostEvent(kind="rendering", provider="p", operation="x"))
+
+
+def test_video_price_prefers_the_model_over_the_provider(tracker: CostTracker) -> None:
+    """Veo Standard and Fast differ by 2.7x; one rate per provider would misprice one."""
+    budgets = Budgets.model_validate(
+        {
+            "pricing": {
+                "video": {
+                    "veo": {"usd_per_second": 0.40},
+                    "veo-3.1-fast-generate-preview": {"usd_per_second": 0.15},
+                }
+            }
+        }
+    )
+    guard = BudgetGuard(budgets, tracker)
+
+    assert guard.estimate_video_usd("veo", 60, "veo-3.1-fast-generate-preview") == pytest.approx(
+        9.0
+    )
+    # An unlisted model falls back to the provider rate rather than to zero.
+    assert guard.estimate_video_usd("veo", 60, "veo-9.9-unreleased") == pytest.approx(24.0)
+    assert guard.estimate_video_usd("veo", 60) == pytest.approx(24.0)

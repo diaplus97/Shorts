@@ -30,8 +30,17 @@ class BudgetGuard:
     def estimate_image_usd(self, provider: str, images: int) -> float:
         return round(images * self.budgets.price("image", provider, "usd_per_image"), 6)
 
-    def estimate_video_usd(self, provider: str, seconds: float) -> float:
-        return round(seconds * self.budgets.price("video", provider, "usd_per_second"), 6)
+    def estimate_video_usd(self, provider: str, seconds: float, model: str | None = None) -> float:
+        """Price a clip, preferring a rate listed for the exact model.
+
+        Veo Standard and Veo Fast differ by roughly 2.7x per second, so a single
+        rate per provider would be wrong for one of them. A model entry wins;
+        the provider entry is the fallback.
+        """
+        rate = self.budgets.price("video", model, "usd_per_second") if model else 0.0
+        if not rate:
+            rate = self.budgets.price("video", provider, "usd_per_second")
+        return round(seconds * rate, 6)
 
     def estimate_tts_usd(self, provider: str, characters: int) -> float:
         return round(characters / 1000 * self.budgets.price("tts", provider, "usd_per_1k_chars"), 6)

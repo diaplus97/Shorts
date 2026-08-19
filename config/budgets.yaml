@@ -5,8 +5,16 @@
 # official pricing. Never hardcode prices in Python (spec section 29).
 
 project:
-  # Sized for mock runs. A Veo run costs far more; see the note under
-  # pricing.video.veo before switching providers.
+  # Sized for mock runs, and deliberately too small for Veo Standard.
+  #
+  # One Short is about 11 scenes snapped to 4/6/8-second clips, so roughly 60
+  # billed seconds:
+  #   Veo 3.1 Standard  60s x $0.40 = ~$24 per Short
+  #   Veo 3.1 Fast      60s x $0.15 = ~$9  per Short
+  # plus up to 2 retries per failed scene at the same per-second rate.
+  #
+  # Fast fits under this cap and Standard does not. That is intentional: raise
+  # it consciously after a `--dry-run`, do not discover it mid-render.
   max_total_usd: 12.00
 
 video:
@@ -37,17 +45,25 @@ pricing:
   video:
     mock:
       usd_per_second: 0.0
-    # PLACEHOLDER. Veo is billed per second of generated video and the rate
-    # differs with audio on/off and between Veo 3 and Veo 3 Fast. Look up the
-    # current rate before the first paid run.
+
+    # Google Veo, billed per second of generated video. Checked 2026-08-19
+    # against Google's published rates; re-check before a paid run, these move.
     #
-    # Read the arithmetic before enabling it: 11 scenes snapped to 8-second
-    # clips is 88 billed seconds, so even at $0.10/s one Short costs about
-    # $8.80 and a single failed scene retried twice adds $2.40. The default
-    # project cap of $12 will stop a run part-way. Raise project.max_total_usd
-    # deliberately, or lower max_scene_attempts, rather than being surprised.
+    # A rate keyed by model id wins over the "veo" fallback below, because
+    # Standard and Fast differ by more than 2.5x and picking the wrong one
+    # silently misprices every scene.
+    #
+    # Audio is included in the per-second rate. Turning generateAudio off does
+    # NOT reduce Google's price -- we turn it off because Veo's audio would
+    # fight the narration we mix, not to save money.
+    veo-3.1-generate-preview:      # Veo 3.1 Standard, 720p and 1080p
+      usd_per_second: 0.40
+    veo-3.1-fast-generate-preview: # Veo 3.1 Fast, 720p and 1080p
+      usd_per_second: 0.15
+    # Fallback when the model id above is not listed.
     veo:
       usd_per_second: 0.40
+
   tts:
     mock:
       usd_per_1k_chars: 0.0

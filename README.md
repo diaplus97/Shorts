@@ -180,7 +180,7 @@ implementation yet.
 providers:
   video: veo
 video:
-  model: veo-3.0-generate-001    # check the current model id
+  model: veo-3.1-fast-generate-preview
   allowed_durations: [4, 6, 8]   # required: Veo returns fixed-length clips
   poll_interval_sec: 15
 ```
@@ -191,12 +191,23 @@ with `VIDEO_API_KEY` in `.env` (a Gemini API key). Then:
 shorts resume projects/<slug> --dry-run
 ```
 
-**Read the cost before running it.** Veo bills per second of generated video,
-and a request is rounded up to the next accepted clip length. Eleven scenes is
-roughly 60 billed seconds; at the placeholder $0.40/s that is about $21 per
-Short, which the default $12 cap will stop part-way through. That is the guard
-working. Raise `project.max_total_usd` deliberately, and replace the placeholder
-price in `config/budgets.yaml` with the current rate first.
+**Veo 3 is gone.** `veo-3.0-generate-001`, `veo-3.0-fast-generate-001` and
+Veo 2 were shut down on 2026-06-30; the config refuses those ids rather than
+letting you find out through a 404 mid-run. Use a Veo 3.1 id.
+
+**Read the cost before running it.** Veo bills per second, and a request is
+rounded up to the next accepted clip length, so eleven scenes is roughly 60
+billed seconds (rates checked 2026-08-19):
+
+| model | rate | one Short |
+| --- | --- | --- |
+| `veo-3.1-generate-preview` (Standard) | $0.40/s | ~$24 |
+| `veo-3.1-fast-generate-preview` (Fast) | $0.15/s | ~$9 |
+
+plus up to two retries per failed scene. The default $12 cap fits Fast and
+deliberately does not fit Standard — raise `project.max_total_usd` consciously
+after a dry run rather than discovering it mid-render. Prices move; re-check
+before a paid run.
 
 The Veo adapter has not been run against the live API — it is written from the
 documented request and response shape, with every drift-prone value in config
