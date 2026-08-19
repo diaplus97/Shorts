@@ -105,7 +105,7 @@ class VideoSettings(BaseModel):
     #: Clip lengths the model accepts. Empty means continuous.
     allowed_durations: list[float] = Field(default_factory=list)
     sample_count: int = 1
-    person_generation: str | None = "allow_adult"
+    person_generation: str | None = None
     resolution: str | None = "1080p"
     #: Veo generates its own audio; we mix our own narration instead.
     generate_audio: bool | None = None

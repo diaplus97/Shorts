@@ -3449,6 +3449,29 @@ Veo 3.1은 오디오 생성이 네이티브라 켜고 끄는 파라미터가 아
 
 **비용과도 무관하다.** Google 단가는 오디오 포함 가격이라 어느 쪽이든 같다.
 
+## F.2b 거절된 파라미터는 떨어뜨리고 재시도한다
+
+preview 모델은 받는 파라미터 집합이 리비전마다 바뀐다. 실제로 한 번에 하나씩
+400을 맞았다:
+
+```text
+`generateAudio` isn't supported by this model.
+allow_adult for personGeneration is currently not supported.
+```
+
+에러 메시지가 **필드 이름을 알려주므로**, 그 필드를 빼고 다시 보낸다. 400은
+생성 전 거절이라 과금이 없고, 어차피 선택적 파라미터였다.
+
+떨어뜨릴 수 있는 것은 `DROPPABLE_PARAMETERS`에 한정한다:
+
+| 파라미터 | 거절 시 |
+|---|---|
+| `generateAudio`, `personGeneration`, `resolution`, `sampleCount`, `negativePrompt` | 빼고 재시도 |
+| `aspectRatio`, `durationSeconds` | **에러.** 빼면 우리가 못 쓰는 클립이 돌아온다 |
+
+우리가 **보낸 적 없는** 필드를 언급하는 메시지는 다른 문제이므로 삼키지 않는다.
+`ContentBlockedError`도 이 경로를 타지 않는다.
+
 ## F.3 정책 거부는 일시적 실패가 아니다
 
 거부된 프롬프트를 3회 재시도하면 돈만 세 번 나가고 세 번 다 실패한다.

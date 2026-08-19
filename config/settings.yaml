@@ -73,7 +73,11 @@ video:
   # decides what you are billed.
   allowed_durations: []
   sample_count: 1
-  person_generation: allow_adult
+  # veo-3.1-fast-generate-preview answers HTTP 400 to allow_adult:
+  #   "allow_adult for personGeneration is currently not supported."
+  # Left empty so the field is not sent and the API default applies. Our scenes
+  # are machine interiors and the negative prompt already bans human figures.
+  person_generation:
   resolution: 1080p
   # Veo 3.1 generates audio natively and rejects this field outright:
   #   HTTP 400 "`generateAudio` isn't supported by this model"

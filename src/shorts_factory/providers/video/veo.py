@@ -61,7 +61,7 @@ class VeoVideoProvider:
         base_url: str = DEFAULT_BASE_URL,
         allowed_durations: tuple[float, ...] = (4.0, 6.0, 8.0),
         sample_count: int = 1,
-        person_generation: str | None = "allow_adult",
+        person_generation: str | None = None,
         resolution: str | None = "1080p",
         generate_audio: bool | None = None,
         extra_parameters: dict[str, Any] | None = None,
@@ -132,11 +132,7 @@ class VeoVideoProvider:
             parameters["resolution"] = self.resolution
         parameters.update(self.extra_parameters)
 
-        body = await self._request(
-            "POST",
-            f"{self.base_url}/models/{self.model}:predictLongRunning",
-            json={"instances": [{"prompt": prompt}], "parameters": parameters},
-        )
+        body = await self._submit_dropping_rejected(prompt, parameters)
         operation = body.get("name")
         if not operation:
             raise ProviderError(
@@ -144,6 +140,47 @@ class VeoVideoProvider:
                 provider=self.name,
             )
         return str(operation)
+
+    async def _submit_dropping_rejected(
+        self, prompt: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        """POST the request, retrying without any tuning field Veo rejects.
+
+        These are preview models and the accepted parameter set moves between
+        revisions -- ``generateAudio`` and ``personGeneration`` were both
+        rejected outright by veo-3.1-fast-generate-preview with HTTP 400
+        INVALID_ARGUMENT, one per round trip. The rejection names the field, so
+        drop it and try again rather than failing the scene over a field that
+        was optional to begin with.
+
+        Only DROPPABLE_PARAMETERS are removed. A rejection of aspectRatio or
+        durationSeconds changes what we would get back, so it stays an error.
+        Nothing here is billed: a 400 is refused before generation starts.
+        """
+        attempted = dict(parameters)
+        dropped: list[str] = []
+        while True:
+            try:
+                return await self._request(
+                    "POST",
+                    f"{self.base_url}/models/{self.model}:predictLongRunning",
+                    json={"instances": [{"prompt": prompt}], "parameters": attempted},
+                )
+            except ContentBlockedError:
+                raise
+            except ProviderError as exc:
+                field = find_rejected_parameter(str(exc), attempted)
+                if field is None:
+                    raise
+                attempted.pop(field)
+                dropped.append(field)
+                log.warning(
+                    "veo_parameter_dropped",
+                    parameter=field,
+                    model=self.model,
+                    dropped_so_far=dropped,
+                    detail=str(exc)[:200],
+                )
 
     async def status(self, job_id: str) -> VideoJobState:
         assert_live_calls_allowed(self.name)
@@ -272,6 +309,39 @@ class VeoVideoProvider:
             provider=self.name,
             retryable=retryable,
         )
+
+
+#: Optional tuning fields that may be dropped when the model rejects them.
+#: aspectRatio and durationSeconds are deliberately absent: dropping either
+#: would silently change the clip we get back, so a rejection there is an error.
+DROPPABLE_PARAMETERS = (
+    "generateAudio",
+    "personGeneration",
+    "resolution",
+    "sampleCount",
+    "negativePrompt",
+)
+
+
+def find_rejected_parameter(message: str, sent: dict[str, Any]) -> str | None:
+    """The droppable parameter an INVALID_ARGUMENT complains about, if any.
+
+    Veo names the field in the message, though not in a fixed position:
+
+        "`generateAudio` isn't supported by this model."
+        "allow_adult for personGeneration is currently not supported."
+
+    So this matches on the field name appearing at all, and only for a field we
+    actually sent -- a message mentioning something we omitted is a different
+    problem and must not be swallowed.
+    """
+    if "400" not in message and "INVALID_ARGUMENT" not in message:
+        return None
+    lowered = message.lower()
+    for field in DROPPABLE_PARAMETERS:
+        if field in sent and field.lower() in lowered:
+            return field
+    return None
 
 
 # -- response walking ------------------------------------------------------

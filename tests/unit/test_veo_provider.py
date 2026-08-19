@@ -20,6 +20,7 @@ from shorts_factory.errors import ContentBlockedError, ProviderError
 from shorts_factory.providers.video.veo import (
     VeoVideoProvider,
     find_block_reason,
+    find_rejected_parameter,
     find_video_payload,
 )
 
@@ -110,6 +111,86 @@ async def test_generate_audio_is_sent_only_when_set() -> None:
             assert "generateAudio" not in params
         else:
             assert params["generateAudio"] is expected
+
+
+def invalid_argument(message: str) -> httpx.Response:
+    return httpx.Response(
+        400,
+        json={"error": {"code": 400, "message": message, "status": "INVALID_ARGUMENT"}},
+    )
+
+
+async def test_a_rejected_tuning_parameter_is_dropped_and_resubmitted() -> None:
+    """Both real rejections, in sequence, must resolve without failing the scene.
+
+    veo-3.1-fast-generate-preview rejected generateAudio and personGeneration
+    one per round trip. Each 400 names its field, so the request is retried
+    without it rather than costing the caller another cycle.
+    """
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        params = body["parameters"]
+        if "generateAudio" in params:
+            return invalid_argument("`generateAudio` isn't supported by this model.")
+        if "personGeneration" in params:
+            return invalid_argument("allow_adult for personGeneration is currently not supported.")
+        return httpx.Response(200, json={"name": OPERATION})
+
+    veo = provider(handler, generate_audio=False, person_generation="allow_adult")
+    job = await veo.submit(prompt="a stack of notes", duration_sec=4.0, aspect_ratio="9:16")
+
+    assert job == OPERATION
+    assert len(bodies) == 3
+    final = bodies[-1]["parameters"]
+    assert "generateAudio" not in final
+    assert "personGeneration" not in final
+    # What we actually asked for has to survive the dropping.
+    assert final["aspectRatio"] == "9:16"
+    assert final["durationSeconds"] == 4
+    assert final["resolution"] == "1080p"
+
+
+async def test_a_rejection_of_a_load_bearing_parameter_still_fails() -> None:
+    """Dropping aspectRatio would silently return a clip we cannot use."""
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return invalid_argument("aspectRatio 9:16 is not supported by this model.")
+
+    veo = provider(handler)
+    with pytest.raises(ProviderError):
+        await veo.submit(prompt="a stack of notes", duration_sec=4.0, aspect_ratio="9:16")
+    assert calls == 1
+
+
+async def test_a_content_block_is_never_treated_as_a_bad_parameter() -> None:
+    """A refusal must reach the caller as ContentBlockedError, not a retry loop."""
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return invalid_argument("The prompt was blocked by our safety filters.")
+
+    veo = provider(handler, generate_audio=False)
+    with pytest.raises(ContentBlockedError):
+        await veo.submit(prompt="a stack of notes", duration_sec=4.0, aspect_ratio="9:16")
+    assert calls == 1
+
+
+def test_find_rejected_parameter_only_matches_what_we_sent() -> None:
+    sent = {"aspectRatio": "9:16", "resolution": "1080p"}
+    message = "Veo HTTP 400: `generateAudio` isn't supported by this model."
+    # We never sent generateAudio, so this is a different problem entirely.
+    assert find_rejected_parameter(message, sent) is None
+    assert find_rejected_parameter("Veo HTTP 400: resolution is invalid", sent) == "resolution"
+    # A 500 is transient, not a parameter problem.
+    assert find_rejected_parameter("Veo HTTP 500: backend error", sent) is None
 
 
 async def test_invalid_argument_is_not_retryable() -> None:
