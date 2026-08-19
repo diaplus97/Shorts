@@ -64,3 +64,50 @@ async def test_openai_tts_produces_audio(tmp_path: Path, config) -> None:
     result = await provider.synthesize("자동문은 사람을 어떻게 알아볼까요?", destination)
     assert Path(result.path).exists()
     assert probe(destination).duration_sec > 0
+
+
+@pytest.mark.skipif(not os.environ.get("VIDEO_API_KEY"), reason="VIDEO_API_KEY is not set")
+async def test_veo_generates_a_clip(tmp_path: Path, config) -> None:
+    """The only test that can tell us whether the Veo adapter is actually right.
+
+    Costs real money: one short clip at the configured per-second rate.
+    """
+    import asyncio
+
+    from shorts_factory.providers.video.veo import VeoVideoProvider
+
+    video = config.settings.video
+    provider = VeoVideoProvider(
+        model=video.model,
+        base_url=video.base_url,
+        allowed_durations=tuple(video.allowed_durations) or (4.0, 6.0, 8.0),
+        resolution=video.resolution,
+        generate_audio=False,
+    )
+
+    job = await provider.submit(
+        prompt=(
+            "macro tracking shot of a single sheet of paper being pulled from a stack "
+            "by a rubber roller inside a machine, documentary CGI cutaway"
+        ),
+        duration_sec=4.0,
+        aspect_ratio=video.aspect_ratio,
+        negative_prompt="visible text, logos, holograms",
+    )
+    assert job
+
+    waited = 0.0
+    while waited < video.poll_timeout_sec:
+        state = await provider.status(job)
+        assert state.state != "failed", state.error
+        if state.state == "completed":
+            break
+        await asyncio.sleep(video.poll_interval_sec)
+        waited += video.poll_interval_sec
+    else:  # pragma: no cover - only on a very slow job
+        pytest.fail(f"Veo job {job} did not finish within {video.poll_timeout_sec}s")
+
+    result = await provider.download(job, tmp_path / "clip.mp4")
+    info = probe(result.path)
+    assert info.has_video
+    assert info.duration_sec > 0

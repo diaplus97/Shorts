@@ -48,6 +48,10 @@ design document is `docs/IMPLEMENTATION_SPEC.md`.
 - Do not leave a schema field that nothing reads or writes. Either wire it up or
   delete it.
 - Do not expand the scope without an explicit requirement.
+- A content-policy refusal is not a transient failure. Never retry one: raise
+  `ContentBlockedError` and let the scene fall back.
+- Discrete clip lengths belong to the provider, via `snap_duration`, so the
+  request, the prompt hash and the cost estimate cannot disagree.
 
 ## Layout
 

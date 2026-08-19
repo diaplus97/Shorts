@@ -173,6 +173,46 @@ async def test_repeated_video_failure_falls_back_to_a_still(context) -> None:
 
 
 @requires_media
+async def test_a_refused_prompt_falls_back_without_burning_retries(context) -> None:
+    """A content-policy refusal is final. Retrying it costs money and fails again."""
+    from shorts_factory.errors import ContentBlockedError
+    from shorts_factory.providers.base import VideoJobState
+
+    class RefusingVideoProvider:
+        name = "refusing"
+        is_mock = True
+        model = "refusing-1"
+
+        def snap_duration(self, seconds: float) -> float:
+            return seconds
+
+        async def submit(self, **kwargs) -> str:
+            return "job-1"
+
+        async def status(self, job_id: str) -> VideoJobState:
+            return VideoJobState(
+                job_id=job_id, state="failed", error="unsafe content", blocked=True
+            )
+
+        async def download(self, job_id: str, destination) -> None:
+            raise ContentBlockedError("refused", provider=self.name)
+
+    await run_through_direct(context)
+    context.providers = dataclasses.replace(context.providers, video=RefusingVideoProvider())
+
+    await run_stage(context, Stage.GENERATE)
+
+    ledger = load_assets(context.workspace)
+    plan = load_scenes(context.workspace)
+    assert ledger.usable_scene_ids() == {scene.id for scene in plan.scenes}
+
+    video_scene = next(s for s in plan.scenes if s.asset_type is AssetType.VIDEO)
+    assert ledger.get(video_scene.id).fallback_used
+    # One attempt, not the three a transient failure would have earned.
+    assert context.tracker.scene_attempts("video", video_scene.id) == 1
+
+
+@requires_media
 async def test_assets_are_not_regenerated_on_a_second_run(context) -> None:
     await run_through_direct(context)
     await run_stage(context, Stage.GENERATE)

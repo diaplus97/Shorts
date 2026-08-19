@@ -17,7 +17,12 @@ from pathlib import Path
 
 from ..cost import CostEvent
 from ..domain import AssetLedger, AssetRecord, AssetStatus, AssetType, Scene, ScenePlan
-from ..errors import BudgetExceededError, PipelineValidationError, ProviderError
+from ..errors import (
+    BudgetExceededError,
+    ContentBlockedError,
+    PipelineValidationError,
+    ProviderError,
+)
 from ..pipeline.checkpoint import load_assets, require_scenes, save_assets, save_project
 from ..pipeline.context import RunContext
 from ..providers import with_retry
@@ -28,8 +33,14 @@ STAGE_NAME = "generate"
 
 
 def requested_video_seconds(context: RunContext, scene: Scene) -> float:
-    """Clip length to ask the provider for, capped at the provider's maximum."""
-    return round(min(scene.duration_sec, context.settings.video.max_clip_duration_sec), 3)
+    """Clip length to ask the provider for.
+
+    Capped at the configured maximum, then snapped to a length the provider
+    actually returns. Doing it here rather than inside the provider keeps the
+    prompt hash and the cost estimate agreeing with the request.
+    """
+    capped = min(scene.duration_sec, context.settings.video.max_clip_duration_sec)
+    return round(context.providers.video.snap_duration(capped), 3)
 
 
 def video_hash(context: RunContext, scene: Scene, prompt: str, negative: str) -> str:
@@ -84,10 +95,14 @@ async def poll_until_done(context: RunContext, job_id: str) -> None:
         if state.state == "completed":
             return
         if state.state == "failed":
-            raise ProviderError(
-                f"video job {job_id} failed: {state.error or 'no reason given'}",
-                provider=video.name,
-            )
+            reason = state.error or "no reason given"
+            if state.blocked:
+                raise ContentBlockedError(
+                    f"video job {job_id} was refused: {reason}",
+                    provider=video.name,
+                    reason=reason,
+                )
+            raise ProviderError(f"video job {job_id} failed: {reason}", provider=video.name)
         if waited >= settings.poll_timeout_sec:
             raise ProviderError(
                 f"video job {job_id} still {state.state} after {waited:.0f}s",
@@ -232,6 +247,11 @@ async def generate_scene(
                     raise
                 last_error = str(exc)
                 context.log.warning("video_attempts_exhausted", scene=scene.id, error=last_error)
+                break
+            except ContentBlockedError as exc:
+                # Retrying a refused prompt costs money and fails again.
+                last_error = str(exc)
+                context.log.warning("render_blocked", scene=scene.id, error=last_error)
                 break
             except ProviderError as exc:
                 last_error = str(exc)

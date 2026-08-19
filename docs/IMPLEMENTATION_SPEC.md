@@ -4,12 +4,13 @@
 > **문서 목적:** AI를 이용해 “평소에는 볼 수 없는 시스템·사물 내부·행동 뒤의 과정”을 시각화하는 YouTube Shorts 제작 파이프라인의 구현 기준서  
 > **대상 개발 도구:** OpenAI Codex / Claude Code  
 > **권장 구현 언어:** Python 3.12  
-> **문서 상태:** MVP Implementation Spec v0.4  
+> **문서 상태:** MVP Implementation Spec v0.5  
 > **기준일:** 2026-08-18
 
 > **v0.2 개정 (Mock/Production 분리, Content Quality Contract):** 부록 C 참조.  
 > **v0.3 개정 (Spoken Narration & Scene-Speech Sync):** 부록 D 참조.  
 > **v0.4 개정 (SFX와 자막 강조):** 부록 E 참조.  
+> **v0.5 개정 (Veo 3 video provider):** 부록 F 참조.  
 > 본문과 부록이 충돌하면 **부록이 우선**한다.
 
 ---
@@ -3397,3 +3398,75 @@ Scene.sfx_cue → config/sfx.yaml library → 파일 → manifest의 scene start
 Scene보다 먼저 만들어지므로 이 필드를 채울 수 있는 코드가 존재하지 않는다.
 항상 null인 필드는 읽는 사람을 오도한다. Scene이 `speech_unit_ids`로 unit을
 가져가는 방향만 남긴다.
+
+
+---
+
+# 부록 F — v0.5 개정 (Phase 7: Veo 3 연결)
+
+스펙 §68이 요구한 "실제 Video Provider 하나"를 Google Veo 3로 채운다.
+Gemini API 경로를 쓴다(`VIDEO_API_KEY`, 헤더 `x-goog-api-key`).
+
+```text
+POST models/{model}:predictLongRunning  → operation name
+GET  {operation name}                   → done / error / 진행 중
+GET  {video uri}                        → mp4
+```
+
+## F.1 클립 길이는 이산값이다
+
+Veo는 고정 길이 클립을 돌려준다. 3.3초를 요청하는 개념이 없다.
+
+`VideoProvider.snap_duration()`을 프로토콜에 추가했다. 길이 규칙은 설정이 아니라
+**provider의 사실**이므로 provider가 소유한다. 파이프라인이 hash와 비용 추정
+**전에** 호출하므로 요청·캐시 키·가격이 항상 일치한다.
+
+올림한다. 짧게 온 클립은 늘릴 수 없지만 긴 클립은 잘라낼 수 있다.
+
+```text
+3.29s 요청 → 4s 청구 → normalize가 3.29s로 트림
+```
+
+## F.2 Veo는 자기 오디오를 만든다
+
+`generateAudio: false`로 요청한다. 우리는 내레이션을 따로 믹스하고, 정규화 단계가
+`-an`으로 어차피 오디오를 버린다. 오디오 없는 생성이 더 싸기도 하다.
+
+## F.3 정책 거부는 일시적 실패가 아니다
+
+거부된 프롬프트를 3회 재시도하면 돈만 세 번 나가고 세 번 다 실패한다.
+
+`ContentBlockedError(ProviderError)`를 추가하고, `VideoJobState.blocked`로
+전달한다. asset 스테이지는 이 예외를 만나면 **재시도 없이** 즉시 스틸 이미지
+fallback으로 넘어간다.
+
+## F.4 비용을 먼저 본다
+
+`config/budgets.yaml`의 `pricing.video.veo.usd_per_second`는 **자리표시자**다.
+Veo 3와 Veo 3 Fast, 오디오 on/off로 단가가 다르므로 첫 유료 실행 전에 현재 요금을
+확인해 고친다.
+
+산수를 먼저 하라. 11개 씬을 8초로 스냅하면 88초가 청구된다. 초당 $0.40이면 한 편에
+약 $20.80이고, 기본 상한 $12는 실행 도중 멈춘다. 이건 버그가 아니라 설계다.
+
+```bash
+shorts resume projects/<slug> --dry-run   # 씬별 초와 금액을 먼저 출력
+```
+
+`project.max_total_usd`를 의식적으로 올리거나 `max_scene_attempts`를 낮춘다.
+
+## F.5 검증되지 않은 부분
+
+이 어댑터는 **라이브 API로 실행된 적이 없다.** 문서화된 요청·응답 형태를 보고
+작성했다. 따라서:
+
+- 응답 파싱은 한 경로를 하드코딩하지 않고 트리를 탐색한다. 형태가 바뀌면
+  `KeyError`가 아니라 명확한 에러로 떨어진다.
+- 흔들릴 수 있는 값은 전부 `config/settings.yaml`에 있다.
+  `base_url`, `model`, `allowed_durations`, `resolution`, `person_generation`,
+  그리고 이 코드가 모르는 필드를 위한 `extra_parameters`.
+- 요청 형태와 응답 처리는 `httpx.MockTransport`로 테스트한다. 실제 API가 이
+  형태와 맞는지는 `pytest -m live`만 답할 수 있다.
+
+첫 유료 실행 전에 Google의 현재 Veo 문서를 다시 확인한다. `aspect_ratio: 9:16`과
+`resolution: 1080p`의 조합은 모델 버전에 따라 지원 여부가 다를 수 있다.

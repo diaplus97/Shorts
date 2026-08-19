@@ -5,6 +5,8 @@
 # official pricing. Never hardcode prices in Python (spec section 29).
 
 project:
+  # Sized for mock runs. A Veo run costs far more; see the note under
+  # pricing.video.veo before switching providers.
   max_total_usd: 12.00
 
 video:
@@ -35,6 +37,17 @@ pricing:
   video:
     mock:
       usd_per_second: 0.0
+    # PLACEHOLDER. Veo is billed per second of generated video and the rate
+    # differs with audio on/off and between Veo 3 and Veo 3 Fast. Look up the
+    # current rate before the first paid run.
+    #
+    # Read the arithmetic before enabling it: 11 scenes snapped to 8-second
+    # clips is 88 billed seconds, so even at $0.10/s one Short costs about
+    # $8.80 and a single failed scene retried twice adds $2.40. The default
+    # project cap of $12 will stop a run part-way. Raise project.max_total_usd
+    # deliberately, or lower max_scene_attempts, rather than being surprised.
+    veo:
+      usd_per_second: 0.40
   tts:
     mock:
       usd_per_1k_chars: 0.0

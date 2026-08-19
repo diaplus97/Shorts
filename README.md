@@ -170,10 +170,39 @@ providers:
   tts: openai      # mock | openai
 ```
 
-Implemented today: `openai` for LLM and TTS, mocks for everything. Search, image
-and video have interfaces and mocks but no real implementation yet — that is
-Phase 5–7 of the spec, and each should be written against the vendor's current
-official documentation, one vendor at a time.
+Implemented today: `openai` for LLM and TTS, `veo` for video, mocks for
+everything. Search and image have interfaces and mocks but no real
+implementation yet.
+
+### Veo 3
+
+```yaml
+providers:
+  video: veo
+video:
+  model: veo-3.0-generate-001    # check the current model id
+  allowed_durations: [4, 6, 8]   # required: Veo returns fixed-length clips
+  poll_interval_sec: 15
+```
+
+with `VIDEO_API_KEY` in `.env` (a Gemini API key). Then:
+
+```bash
+shorts resume projects/<slug> --dry-run
+```
+
+**Read the cost before running it.** Veo bills per second of generated video,
+and a request is rounded up to the next accepted clip length. Eleven scenes is
+roughly 60 billed seconds; at the placeholder $0.40/s that is about $21 per
+Short, which the default $12 cap will stop part-way through. That is the guard
+working. Raise `project.max_total_usd` deliberately, and replace the placeholder
+price in `config/budgets.yaml` with the current rate first.
+
+The Veo adapter has not been run against the live API — it is written from the
+documented request and response shape, with every drift-prone value in config
+(including `extra_parameters` for a field it does not know about). Its request
+building and response handling are covered by tests using a mock transport;
+whether Google's API matches is covered by `pytest -m live`.
 
 ## Testing
 

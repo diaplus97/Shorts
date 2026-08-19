@@ -71,6 +71,8 @@ class VideoJobState(BaseModel):
     state: str
     error: str | None = None
     progress: float | None = None
+    #: The provider refused the prompt. Retrying will not help.
+    blocked: bool = False
 
 
 class VideoResult(BaseModel):
@@ -143,6 +145,15 @@ class VideoProvider(Protocol):
     #: True for stand-ins. A mock anywhere blocks a production render.
     is_mock: bool
     model: str
+
+    def snap_duration(self, seconds: float) -> float:
+        """Round a requested clip length to one this provider actually accepts.
+
+        Discrete clip lengths are a provider fact, not a pipeline setting, so the
+        provider owns the rule. The pipeline calls this before hashing and before
+        estimating cost, so the request, the cache key and the price all agree.
+        """
+        ...
 
     async def submit(
         self,

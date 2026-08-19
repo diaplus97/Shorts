@@ -2,5 +2,11 @@
 
 from .mock import MockVideoProvider
 from .prompt_adapter import GenericPromptAdapter, VideoPromptAdapter
+from .veo import VeoVideoProvider
 
-__all__ = ["GenericPromptAdapter", "MockVideoProvider", "VideoPromptAdapter"]
+__all__ = [
+    "GenericPromptAdapter",
+    "MockVideoProvider",
+    "VeoVideoProvider",
+    "VideoPromptAdapter",
+]

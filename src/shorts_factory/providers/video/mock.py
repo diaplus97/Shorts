@@ -46,6 +46,10 @@ class MockVideoProvider:
     fail_prompt_substrings: tuple[str, ...] = ()
     _jobs: dict[str, _Job] = field(default_factory=dict, repr=False)
 
+    def snap_duration(self, seconds: float) -> float:
+        """The mock has no discrete clip lengths, so the request passes through."""
+        return seconds
+
     async def submit(
         self,
         *,

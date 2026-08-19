@@ -100,6 +100,20 @@ class VideoSettings(BaseModel):
     poll_timeout_sec: float = 900.0
     max_clip_duration_sec: float = 8.0
 
+    # -- Veo --------------------------------------------------------------
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    #: Clip lengths the model accepts. Empty means continuous.
+    allowed_durations: list[float] = Field(default_factory=list)
+    sample_count: int = 1
+    person_generation: str | None = "allow_adult"
+    resolution: str | None = "1080p"
+    #: Veo generates its own audio; we mix our own narration instead.
+    generate_audio: bool = False
+    timeout_sec: float = 120.0
+    download_timeout_sec: float = 600.0
+    #: Escape hatch for a request field this code does not know about.
+    extra_parameters: dict[str, Any] = Field(default_factory=dict)
+
 
 class ImageSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")

@@ -44,11 +44,34 @@ quality:
 video:
   model: mock-video-1
   aspect_ratio: "9:16"
-  # Mock jobs finish immediately; real video jobs take minutes, so raise this
-  # (and poll_timeout_sec) when you wire a real provider.
+  # Mock jobs finish immediately; a Veo job takes minutes. Raise both of these
+  # when switching providers.video to veo.
   poll_interval_sec: 2
   poll_timeout_sec: 900
   max_clip_duration_sec: 8.0
+
+  # --- Veo -----------------------------------------------------------------
+  # Used only when providers.video is "veo". To switch, set:
+  #   providers.video: veo
+  #   video.model: veo-3.0-generate-001     (check the current model id)
+  #   video.allowed_durations: [4, 6, 8]    (required: Veo clips are fixed length)
+  #   video.poll_interval_sec: 15
+  # and put VIDEO_API_KEY in .env.
+  base_url: https://generativelanguage.googleapis.com/v1beta
+  # Clip lengths the model returns. Empty means continuous (mock only). A
+  # request is rounded UP to the shortest length that covers it, so this also
+  # decides what you are billed.
+  allowed_durations: []
+  sample_count: 1
+  person_generation: allow_adult
+  resolution: 1080p
+  # Veo generates its own audio. We mix our own narration, so leave this off.
+  generate_audio: false
+  timeout_sec: 120
+  download_timeout_sec: 600
+  # Passed through verbatim into the request parameters. Use this for a field
+  # this code does not know about rather than editing the provider.
+  extra_parameters: {}
 
 image:
   model: mock-image-1

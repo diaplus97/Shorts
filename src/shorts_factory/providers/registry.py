@@ -20,6 +20,7 @@ from .tts.mock import MockTTSProvider
 from .tts.openai import OpenAITTSProvider
 from .video.mock import MockVideoProvider
 from .video.prompt_adapter import GenericPromptAdapter, VideoPromptAdapter
+from .video.veo import VeoVideoProvider
 
 
 @dataclass(frozen=True)
@@ -95,19 +96,34 @@ def build_image(config: AppConfig) -> ImageProvider:
 
 def build_video(config: AppConfig) -> VideoProvider:
     name = config.settings.providers.video
+    video = config.settings.video
     if name == "mock":
         return MockVideoProvider(
-            model=config.settings.video.model,
+            model=video.model,
             width=config.settings.output.width,
             height=config.settings.output.height,
             fps=config.settings.output.fps,
         )
-    raise ConfigError(
-        f"unknown video provider '{name}'; only 'mock' is implemented. "
-        "Phase 7 wires exactly one real video provider "
-        "(docs/IMPLEMENTATION_SPEC.md section 68); implement it against that "
-        "vendor's current official documentation."
-    )
+    if name == "veo":
+        if not video.allowed_durations:
+            raise ConfigError(
+                "video.allowed_durations is empty, but Veo only returns fixed-length "
+                "clips. Set it to the lengths your model accepts (e.g. [4, 6, 8]) so "
+                "the cost estimate matches what you are billed."
+            )
+        return VeoVideoProvider(
+            model=video.model,
+            base_url=video.base_url,
+            allowed_durations=tuple(video.allowed_durations),
+            sample_count=video.sample_count,
+            person_generation=video.person_generation,
+            resolution=video.resolution,
+            generate_audio=video.generate_audio,
+            extra_parameters=video.extra_parameters,
+            timeout_sec=video.timeout_sec,
+            download_timeout_sec=video.download_timeout_sec,
+        )
+    raise ConfigError(f"unknown video provider '{name}'; available: mock, veo")
 
 
 def build_tts(config: AppConfig) -> TTSProvider:
