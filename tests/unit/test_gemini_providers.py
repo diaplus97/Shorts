@@ -50,7 +50,26 @@ def search_provider(handler, **kwargs) -> GeminiSearchProvider:
 
 def image_provider(handler, **kwargs) -> GeminiImageProvider:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    return GeminiImageProvider(model="imagen-4.0-generate-001", client=client, **kwargs)
+    return GeminiImageProvider(model="gemini-3.1-flash-image", client=client, **kwargs)
+
+
+def image_reply(data: bytes) -> dict:
+    return {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": "image/png",
+                                "data": base64.b64encode(data).decode("ascii"),
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
 
 
 def grounded(*sources: tuple[str, str]) -> dict:
@@ -204,46 +223,39 @@ def test_grounding_chunks_are_found_wherever_they_sit() -> None:
 # -- images ----------------------------------------------------------------
 
 
-async def test_image_sends_a_prediction_and_writes_the_file(tmp_path: Path) -> None:
+async def test_image_uses_generate_content_not_predict(tmp_path: Path) -> None:
+    """Listing the key found no imagen model; the image models answer
+    generateContent and not predict, so the original shape would have 404'd."""
     seen: dict = {}
     target = tmp_path / "S01" / "source.png"
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
         seen["body"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={
-                "predictions": [
-                    {"bytesBase64Encoded": base64.b64encode(IMAGE_BYTES).decode("ascii")}
-                ]
-            },
-        )
+        return httpx.Response(200, json=image_reply(IMAGE_BYTES))
 
     result = await image_provider(handler).generate(
         prompt="a rubber roller", width=1080, height=1920, destination=target
     )
 
-    assert seen["url"].endswith("/models/imagen-4.0-generate-001:predict")
-    assert seen["body"]["instances"] == [{"prompt": "a rubber roller"}]
-    assert seen["body"]["parameters"]["aspectRatio"] == "9:16"
+    assert seen["url"].endswith("/models/gemini-3.1-flash-image:generateContent")
+    assert "predict" not in seen["url"]
+    config = seen["body"]["generationConfig"]
+    assert config["responseModalities"] == ["IMAGE"]
+    assert config["imageConfig"]["aspectRatio"] == "9:16"
     assert Path(result.path).read_bytes() == IMAGE_BYTES
 
 
-async def test_image_passes_the_negative_prompt(tmp_path: Path) -> None:
-    """The Style Bible's avoid list is the whole reason stills are on-model."""
+async def test_the_avoid_list_is_spoken_because_there_is_no_negative_field(
+    tmp_path: Path,
+) -> None:
+    """generateContent has no negativePrompt, and the Style Bible's avoid list
+    is what keeps a still from sprouting holograms. It has to be said in words."""
     seen: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["body"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={
-                "predictions": [
-                    {"bytesBase64Encoded": base64.b64encode(IMAGE_BYTES).decode("ascii")}
-                ]
-            },
-        )
+        return httpx.Response(200, json=image_reply(IMAGE_BYTES))
 
     await image_provider(handler).generate(
         prompt="a roller",
@@ -252,44 +264,38 @@ async def test_image_passes_the_negative_prompt(tmp_path: Path) -> None:
         destination=tmp_path / "a.png",
         negative_prompt="floating UI panels, neon",
     )
-    assert seen["body"]["parameters"]["negativePrompt"] == "floating UI panels, neon"
+    text = seen["body"]["contents"][0]["parts"][0]["text"]
+    assert "a roller" in text
+    assert "floating UI panels, neon" in text
 
 
-async def test_image_drops_a_rejected_parameter_and_retries(tmp_path: Path) -> None:
+async def test_image_drops_a_rejected_config_field_and_retries(tmp_path: Path) -> None:
     """The lesson Veo taught: a 400 names the field, so drop it rather than fail."""
     bodies: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         bodies.append(body)
-        if "personGeneration" in body["parameters"]:
+        if "imageConfig" in body["generationConfig"]:
             return httpx.Response(
                 400,
                 json={
                     "error": {
                         "code": 400,
-                        "message": "personGeneration is not supported by this model.",
+                        "message": "Unknown name imageConfig.",
                         "status": "INVALID_ARGUMENT",
                     }
                 },
             )
-        return httpx.Response(
-            200,
-            json={
-                "predictions": [
-                    {"bytesBase64Encoded": base64.b64encode(IMAGE_BYTES).decode("ascii")}
-                ]
-            },
-        )
+        return httpx.Response(200, json=image_reply(IMAGE_BYTES))
 
-    provider = image_provider(handler, person_generation="allow_adult")
-    await provider.generate(
+    await image_provider(handler).generate(
         prompt="a roller", width=1080, height=1920, destination=tmp_path / "a.png"
     )
     assert len(bodies) == 2
-    assert "personGeneration" not in bodies[-1]["parameters"]
-    # What we actually asked for has to survive the dropping.
-    assert bodies[-1]["parameters"]["aspectRatio"] == "9:16"
+    assert "imageConfig" not in bodies[-1]["generationConfig"]
+    # Dropping a tuning field must never drop the request for a picture.
+    assert bodies[-1]["generationConfig"]["responseModalities"] == ["IMAGE"]
 
 
 async def test_a_refused_image_prompt_is_not_a_broken_response(tmp_path: Path) -> None:
@@ -306,7 +312,7 @@ async def test_a_refused_image_prompt_is_not_a_broken_response(tmp_path: Path) -
 
 async def test_a_response_with_no_image_is_a_clear_error(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"predictions": []})
+        return httpx.Response(200, json={"candidates": []})
 
     with pytest.raises(ProviderError, match="no image"):
         await image_provider(handler).generate(

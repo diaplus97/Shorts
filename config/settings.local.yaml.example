@@ -26,14 +26,21 @@ providers:
 # documentation says.
 
 llm:
-  model: gemini-2.5-flash
+  # The writer is the stage where model quality shows up most, so this is the
+  # newest flash tier the key listed. Drop to gemini-2.5-flash if anything
+  # misbehaves -- both were present in the listing this was set from.
+  model: gemini-3.7-flash
 
 search:
-  # A 3.x model grounds at roughly 2.5x lower cost with a larger free tier.
-  model: gemini-2.5-flash
+  # A 3.x model grounds at roughly 2.5x lower cost with a larger free tier
+  # than 2.5, so there is no reason to ground on an older one.
+  model: gemini-3.7-flash
 
 image:
-  model: imagen-4.0-generate-001
+  # NOT an imagen-* id. Listing the key showed no imagen model at all: the
+  # image models are the gemini-*-image family and they answer generateContent,
+  # not predict. gemini-2.5-flash-image is the cheaper, longer-established one.
+  model: gemini-3.1-flash-image
 
 video:
   model: veo-3.1-fast-generate-preview

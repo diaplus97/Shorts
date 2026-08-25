@@ -68,7 +68,7 @@ class SearchSettings(BaseModel):
     max_results_per_query: int = 6
 
     # -- Gemini grounded search -------------------------------------------
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-3.7-flash"
     base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     timeout_sec: float = 60.0
     #: Google returns redirect URIs on its own domain that expire. Following
