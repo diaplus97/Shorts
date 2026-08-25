@@ -118,6 +118,54 @@ def _print_plans(context: RunContext, until: Stage | None) -> None:
         typer.secho("this plan exceeds the project budget", fg=typer.colors.RED)
 
 
+#: The first stage that spends real money on assets. Everything before it is
+#: research and text, which is cheap; everything after commits to the script.
+FIRST_PAID_STAGE = Stage.GENERATE
+
+
+def _review_gate(until: Stage | None, auto_yes: bool):
+    """A gate that shows the script and asks once, before anything expensive.
+
+    Reading the narration before eleven clips are bought against it is the
+    cheapest quality control available -- a bad script cannot be rescued by
+    good pictures, and by the generate stage the money is already gone.
+    """
+    asked = {"done": False}
+
+    def gate(context: RunContext, stage: Stage) -> bool:
+        if asked["done"] or stage is not FIRST_PAID_STAGE:
+            return True
+        asked["done"] = True
+
+        script = load_script(context.workspace)
+        if script is None:
+            # Nothing written yet, so there is nothing to review; the stage
+            # itself will fail with a clearer message than this gate could.
+            return True
+        typer.echo("")
+        typer.secho("  SCRIPT", bold=True)
+        typer.echo(f"    {script.hook}")
+        typer.echo("")
+        for beat in script.beats:
+            typer.echo(f"    [{beat.purpose:<10}] {beat.text}")
+        typer.echo("")
+
+        plans = plan_pipeline(context, until=until)
+        remaining = total_estimated_cost([plan for plan in plans if not plan.skipped])
+        spent = context.tracker.total_usd()
+        typer.secho(
+            f"  spent so far ${spent:.4f} — the stages after this cost about ${remaining:.4f} more",
+            bold=True,
+        )
+        typer.echo("")
+
+        if auto_yes:
+            return True
+        return typer.confirm("  Generate the video from this script?", default=False)
+
+    return gate
+
+
 @app.callback()
 def main(
     config_dir: Annotated[
@@ -152,8 +200,17 @@ def create(
     force: Annotated[
         bool, typer.Option("--force", help="Re-run stages already completed.")
     ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip the script review before paid generation."),
+    ] = False,
 ) -> None:
-    """Create a project and run the pipeline."""
+    """Create a project and run the pipeline.
+
+    Stops once before the first paid stage to show the script and ask, so one
+    command can run end to end without spending on a script nobody read.
+    Pass --yes to run straight through.
+    """
     config = _config()
     try:
         project, workspace = create_project(
@@ -177,7 +234,7 @@ def create(
         _print_plans(context, until)
         return
 
-    result = _run(run_pipeline(context, until=until))
+    result = _run(run_pipeline(context, until=until, before_stage=_review_gate(until, yes)))
     _print_result(context, result)
 
 
@@ -187,13 +244,17 @@ def resume(
     until: Annotated[Stage | None, typer.Option("--until")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     force: Annotated[bool, typer.Option("--force")] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip the script review before paid generation."),
+    ] = False,
 ) -> None:
     """Continue a project, skipping work that is already done."""
     context, _ = _context(project, dry_run=dry_run, force=force)
     if dry_run:
         _print_plans(context, until)
         return
-    result = _run(run_pipeline(context, until=until))
+    result = _run(run_pipeline(context, until=until, before_stage=_review_gate(until, yes)))
     _print_result(context, result)
 
 

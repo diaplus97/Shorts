@@ -7,6 +7,8 @@ invalidates everything downstream of it.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..domain import (
@@ -106,11 +108,31 @@ async def run_stage(context: RunContext, stage: Stage) -> bool:
     return True
 
 
-async def run_pipeline(context: RunContext, *, until: Stage | None = None) -> PipelineResult:
+#: Consulted before each stage. Returning False stops the run cleanly, with
+#: everything already done left on disk for `resume`.
+StageGate = Callable[[RunContext, Stage], bool]
+
+
+async def run_pipeline(
+    context: RunContext,
+    *,
+    until: Stage | None = None,
+    before_stage: StageGate | None = None,
+) -> PipelineResult:
+    """Run the stages in order, optionally asking before each one.
+
+    ``before_stage`` exists so the CLI can put a human in front of the money:
+    the script is worth reading before eleven video clips are bought against
+    it, and a caller that declines simply stops -- the completed stages stay on
+    disk and `resume` picks up from there.
+    """
     executed: list[str] = []
     skipped: list[str] = []
 
     for stage in stages_up_to(until):
+        if before_stage is not None and not before_stage(context, stage):
+            context.log.info("run_stopped_at_gate", stage=stage.value)
+            break
         if await run_stage(context, stage):
             executed.append(stage.value)
         else:

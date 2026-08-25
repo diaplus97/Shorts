@@ -29,8 +29,8 @@ def cli_config(tmp_path: Path) -> Path:
     return target
 
 
-def invoke(cli_config: Path, *args: str):
-    return runner.invoke(app, ["--config-dir", str(cli_config), *args])
+def invoke(cli_config: Path, *args: str, answer: str | None = None):
+    return runner.invoke(app, ["--config-dir", str(cli_config), *args], input=answer)
 
 
 def test_version(cli_config: Path) -> None:
@@ -168,3 +168,62 @@ def test_unknown_project_exits_with_an_error(cli_config: Path) -> None:
 def test_unknown_content_type_is_rejected(cli_config: Path) -> None:
     result = invoke(cli_config, "create", "--topic", "x", "--type", "not_a_type")
     assert result.exit_code != 0
+
+
+# -- the review gate -------------------------------------------------------
+#
+# One command should be able to run end to end, but not spend on a script
+# nobody read. The gate stops once, before the first paid stage.
+
+
+ATM = ("--topic", "ATM은 돈을 어떻게 세는 걸까?", "--type", "inside_object")
+
+
+def test_declining_the_script_stops_before_the_paid_stage(cli_config: Path, tmp_path: Path) -> None:
+    """Answering no leaves everything already done on disk for resume."""
+    result = invoke(cli_config, "create", *ATM, "--slug", "gated", answer="n\n")
+
+    assert result.exit_code == 0, result.stdout
+    assert "Generate the video from this script?" in result.stdout
+    # Stopped at the last free stage, with nothing generated.
+    assert "state: directed" in result.stdout
+    project = tmp_path / "projects" / "gated"
+    assert not (project / "output" / "final.mp4").exists()
+    assert not (project / "output" / "mock_preview.mp4").exists()
+
+
+def test_the_gate_shows_the_script_it_is_asking_about(cli_config: Path) -> None:
+    """Asking "spend money?" without showing what on is not a review."""
+    result = invoke(cli_config, "create", *ATM, "--slug", "gated", answer="n\n")
+
+    assert "SCRIPT" in result.stdout
+    assert "[hook" in result.stdout
+    assert "[closing" in result.stdout
+    assert "spent so far" in result.stdout
+
+
+def test_resume_after_declining_finishes_the_run(cli_config: Path, tmp_path: Path) -> None:
+    invoke(cli_config, "create", *ATM, "--slug", "gated", answer="n\n")
+    result = invoke(cli_config, "resume", "gated", answer="y\n")
+
+    assert result.exit_code == 0, result.stdout
+    assert "state: done" in result.stdout
+    # The free stages are not paid for twice.
+    assert "skipped : ['research'" in result.stdout
+
+
+def test_yes_runs_straight_through_without_asking(cli_config: Path) -> None:
+    """Unattended use has to stay possible; the gate is a default, not a wall."""
+    result = invoke(cli_config, "create", *ATM, "--slug", "gated", "--yes")
+
+    assert result.exit_code == 0, result.stdout
+    assert "Generate the video from this script?" not in result.stdout
+    assert "state: done" in result.stdout
+
+
+def test_stopping_before_the_paid_stage_never_asks(cli_config: Path) -> None:
+    """--until direct is already a decision not to spend."""
+    result = invoke(cli_config, "create", *ATM, "--until", "direct", "--slug", "gated")
+
+    assert result.exit_code == 0, result.stdout
+    assert "Generate the video from this script?" not in result.stdout

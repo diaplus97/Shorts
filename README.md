@@ -157,6 +157,36 @@ grammar in `config/content_types.yaml`:
 Prices in `config/budgets.yaml` are placeholders. Replace them with your
 provider's current official pricing before running anything paid.
 
+## One command
+
+```bash
+shorts create --topic "ATM은 돈을 어떻게 세는 걸까?" --type inside_object
+```
+
+That runs every stage: research, write, fact lock, speech plan, direct,
+generate, narrate, validate, compose. It stops once, before the first stage
+that spends money on assets, to print the script and ask:
+
+```
+  SCRIPT
+    ATM은 지폐를 어떻게 한 장씩 셀까요?
+
+    [hook      ] ATM은 지폐를 어떻게 한 장씩 셀까요?
+    [reveal    ] 지폐를 넣으면 안에서는 바로 확인이 시작됩니다. …
+
+  spent so far $0.2100 — the stages after this cost about $6.6000 more
+
+  Generate the video from this script? [y/N]:
+```
+
+Answer `n` and the run stops with everything already done left on disk;
+`shorts resume <slug>` picks up from there. Reading the narration before
+eleven clips are bought against it is the cheapest quality control available,
+because a script nobody read is not rescued by good pictures.
+
+`--yes` skips the question for unattended runs, and `--until direct` is
+already a decision not to spend.
+
 ## Connecting real providers
 
 Providers are selected in config and credentialed in `.env`. The committed
