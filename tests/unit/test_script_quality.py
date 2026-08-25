@@ -235,3 +235,33 @@ def test_a_hook_that_is_not_the_first_beat_is_rejected(config: AppConfig, settin
     script = load("good_atm").model_copy(update={"hook": "완전히 다른 훅 문장일까요?"})
     codes_found = {i.code for i in check_hook(script, config.content_contract, settings.script)}
     assert "hook_not_first_beat" in codes_found
+
+
+# -- visual realism --------------------------------------------------------
+
+
+def test_realism_follows_the_scene_reality_type(config: AppConfig) -> None:
+    """A scene the taxonomy calls a drawing must not be ordered as footage.
+
+    "photorealistic" used to be appended to every prompt unconditionally, so
+    the reality_type suffix asking for a cutaway sat in the same string as the
+    instruction to make it photoreal.
+    """
+    styles = config.visual_styles
+    observed = styles.reality_type_style["observed"]
+    reconstructed = styles.reality_type_style["reconstructed"]
+
+    assert "photorealistic" in styles.style.as_prompt_fragment(observed.realism)
+    assert "photorealistic" not in styles.style.as_prompt_fragment(reconstructed.realism)
+
+
+def test_no_prompt_asks_for_a_drawing_and_a_photograph_at_once(config: AppConfig) -> None:
+    """The suffix and the realism flag have to agree, or the model gets both."""
+    styles = config.visual_styles
+    for name, entry in styles.reality_type_style.items():
+        fragment = styles.style.as_prompt_fragment(entry.realism)
+        combined = f"{entry.suffix} {fragment}"
+        drawn = "visibly a drawing" in combined or "diagrammatic" in combined
+        assert not (drawn and "photorealistic" in combined), (
+            f"reality_type '{name}' asks for a drawing and a photograph in one prompt"
+        )

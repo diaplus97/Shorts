@@ -421,17 +421,27 @@ class ContentTypeConfig(BaseModel):
     default_reality_type: str = "reconstructed"
 
 
-class RealityTypeStyle(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    suffix: str = ""
-
-
 class Realism(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     photorealistic: bool = True
     physically_plausible: bool = True
+
+
+class RealityTypeStyle(BaseModel):
+    """How a scene looks, given what kind of claim its picture is making.
+
+    A cutaway of a machine interior nobody filmed is a reconstruction, and a
+    photorealistic reconstruction asserts "it looks like this" with documentary
+    force. The fact lock holds narration to its sources and has no visual
+    counterpart, so realism has to be decided per scene rather than globally.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    suffix: str = ""
+    #: Overrides the Style Bible's realism for scenes of this type. None keeps it.
+    realism: Realism | None = None
 
 
 class StyleBible(BaseModel):
@@ -447,11 +457,13 @@ class StyleBible(BaseModel):
     transitions: list[str] = Field(default_factory=list)
     avoid: list[str] = Field(default_factory=list)
 
-    def as_prompt_fragment(self) -> str:
+    def as_prompt_fragment(self, realism: Realism | None = None) -> str:
+        """The shared look. ``realism`` overrides the default for one scene type."""
+        effective = realism or self.realism
         parts = [self.genre]
-        if self.realism.photorealistic:
+        if effective.photorealistic:
             parts.append("photorealistic")
-        if self.realism.physically_plausible:
+        if effective.physically_plausible:
             parts.append("physically plausible materials and motion")
         parts.extend(self.palette)
         parts.extend(self.camera)

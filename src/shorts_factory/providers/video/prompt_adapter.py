@@ -65,7 +65,10 @@ class GenericPromptAdapter:
 
         if reality and reality.suffix.strip():
             parts.append(_squash(reality.suffix))
-        parts.append(style.as_prompt_fragment())
+        # Realism follows the scene's reality type. "photorealistic" used to be
+        # appended to every prompt regardless, so a scene the taxonomy calls a
+        # diagram was still ordered as footage.
+        parts.append(style.as_prompt_fragment(reality.realism if reality else None))
         parts.append("vertical 9:16 framing, subject inside the safe area")
         return ", ".join(part for part in parts if part.strip())
 

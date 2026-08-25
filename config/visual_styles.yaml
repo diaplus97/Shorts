@@ -46,14 +46,46 @@ style:
     - extra limbs
     - uncanny faces
 
+# How each kind of scene looks. `realism` here overrides style.realism above,
+# because whether a shot may look like footage depends on what it is claiming.
+#
+# HOUSE STYLE: this file ships the "reconstruction" position -- only a scene
+# that could actually have been filmed is ordered photorealistic; anything
+# inside a machine is drawn as an engineering cutaway, and anything abstract as
+# a flat diagram. To try another position, copy this block into
+# config/visual_styles.local.yaml and edit it there:
+#
+#   photoreal everywhere   -> set photorealistic: true on all three
+#   diagram everywhere     -> set photorealistic: false on all three
+#
+# See scripts/compare_visual_styles.py to print, or generate, the difference.
+
 reality_type_style:
   observed:
+    # Something a camera could have been pointed at. Photoreal is honest here.
+    realism:
+      photorealistic: true
+      physically_plausible: true
     suffix: "shot as real-world documentary footage"
+
   reconstructed:
+    # A machine interior nobody filmed. Rendered as a technical cutaway rather
+    # than as footage: an engineering drawing says "this is how it works", a
+    # photograph says "this is what it looks like", and only the first is
+    # something the sources actually support.
+    realism:
+      photorealistic: false
+      physically_plausible: true
     suffix: >
       technical cutaway reconstruction, engineering-accurate proportions,
-      clean sectional view, real materials and surfaces
+      clean sectional view, matte surfaces, no photographic depth of field,
+      visibly a drawing rather than footage
+
   conceptual:
+    # Not a physical object at all -- a flow, a comparison, a quantity.
+    realism:
+      photorealistic: false
+      physically_plausible: false
     suffix: >
-      explanatory diagrammatic visualisation, flat graphic treatment, clearly
-      stylised so it is not mistaken for real internal footage
+      explanatory diagrammatic visualisation, flat graphic treatment, limited
+      palette, clearly stylised so it is not mistaken for real internal footage
