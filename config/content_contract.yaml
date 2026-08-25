@@ -6,9 +6,21 @@
 # turns its check off.
 
 hook:
-  # The first sentence must leave the viewer with a question.
+  # The first sentence has to leave the viewer wanting an answer. It may ask
+  # outright, or open on a quantity specific enough to raise the question by
+  # itself -- the benchmark Short opens "서울에서 하루 동안 사용하고 버린 물은
+  # 네 곳의 물재생센터로 모입니다", a flat statement, and it works.
   must_create_question: true
-  max_seconds: 3.0
+  # At chars_per_sec 6.2 this is the hook's character budget: 3.0s was 19
+  # characters, too few to name a subject AND a specific detail AND ask
+  # something, so the cheapest way to comply was a generic stub question --
+  # pushing directly against the concreteness rule.
+  #
+  # The benchmark Short's opening sentence is 30 characters, 4.84s at this
+  # rate, so the budget is set just above it. Tighten it in a local override if
+  # you would rather open faster; 3.0s is not a budget a concrete sentence fits
+  # in, and that is what the old value was.
+  max_seconds: 5.0
 
 script:
   # Abstractions used where a concrete noun was available.

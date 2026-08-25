@@ -26,11 +26,47 @@ from ..domain import (
     ScenePlan,
     ScriptResult,
 )
-from ..utils import estimate_duration_sec, visible_length
+from ..utils import estimate_duration_sec, normalize_whitespace, visible_length
 from .report import QAIssue, error, warning
 
-#: Interrogatives that make a Korean sentence a real question.
-_QUESTION_MARKERS = ("?", "까", "왜", "무엇", "뭘", "어떻게", "어디", "언제", "누가", "얼마")
+#: Interrogative words. These are distinctive enough to match as substrings.
+#: Bare "까" is deliberately absent: it matched inside "들어오니까" and "닫히니까",
+#: so any sentence with a causal clause counted as a question.
+_INTERROGATIVES = ("왜", "무엇", "뭘", "뭐가", "어떻게", "어디", "언제", "누가", "얼마", "몇")
+
+#: Question endings, anchored to the end of the sentence so a clause-internal
+#: syllable cannot pass for one.
+_QUESTION_ENDING = re.compile(r"(?:까요|ㄹ까|을까|랄까|나요|는가|은가|던가|니|냐)\s*\??\s*$")
+
+#: A native Korean numeral bound to a counter -- "네 곳", "두 가지", "수천 개".
+#: Bare numeral syllables are not usable on their own: 만/백/천 are also the
+#: particle 만 ("only") and ordinary syllables, so "물만 나갑니다" counted as a
+#: quantity. A counter is what makes it one.
+_COUNTED_QUANTITY = re.compile(
+    r"(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|스무|수십|수백|수천|수만|몇)\s*"
+    r"(?:곳|개|명|번|층|배|가지|종류|시간|분|초|톤|미터|킬로|번째|단계|칸|줄|대|척|권|장)"
+)
+
+
+def is_question(text: str) -> bool:
+    """A real Korean question, not a sentence containing a question-ish syllable."""
+    stripped = text.strip()
+    if stripped.endswith("?"):
+        return True
+    if _QUESTION_ENDING.search(stripped.rstrip(".!")):
+        return True
+    return any(word in stripped for word in _INTERROGATIVES)
+
+
+def has_concrete_anchor(text: str) -> bool:
+    """A quantity or count, which is what lets a statement open a video.
+
+    The benchmark Short opens "서울에서 하루 동안 사용하고 버린 물은 네 곳의
+    물재생센터로 모입니다" -- a flat declarative. It works because the scale is
+    specific enough to raise the question by itself.
+    """
+    return any(character.isdigit() for character in text) or bool(_COUNTED_QUANTITY.search(text))
+
 
 #: A scene that only restates narration tends to describe a state, not an event.
 _STATIC_VERB_HINTS = ("있다", "이다", "입니다", "존재", "구성되")
@@ -43,12 +79,29 @@ def check_hook(
     clause = contract.hook
     hook = script.hook.strip()
 
-    if clause.must_create_question and not any(marker in hook for marker in _QUESTION_MARKERS):
+    # Either ask, or say something specific enough that the viewer asks. The
+    # rule used to be "must pose a question", which the benchmark's own opening
+    # line fails -- it is a flat statement of scale, and it works.
+    if clause.must_create_question and not (is_question(hook) or has_concrete_anchor(hook)):
         issues.append(
             error(
                 "hook_no_question",
-                "the hook does not pose a question; the first three seconds must "
-                f"leave the viewer wanting an answer (hook: {hook!r})",
+                "the hook neither asks anything nor says anything specific. The first "
+                "three seconds have to leave the viewer wanting an answer: ask outright, "
+                "or open on a quantity concrete enough to raise the question by itself "
+                f"(hook: {hook!r})",
+            )
+        )
+
+    # script.hook is what the checks read; beats[0].text is what gets spoken. A
+    # fine question in the first field and a flat sentence in the second passes
+    # every hook check and ships the flat one.
+    if script.beats and normalize_whitespace(script.beats[0].text) != normalize_whitespace(hook):
+        issues.append(
+            error(
+                "hook_not_first_beat",
+                f"script.hook is not the text of the first beat {script.beats[0].id}; "
+                "the hook that is checked has to be the hook that is spoken",
             )
         )
 

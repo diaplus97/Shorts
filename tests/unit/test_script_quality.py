@@ -26,6 +26,7 @@ from shorts_factory.quality import (
     check_causal_linkage,
     check_korean_register,
 )
+from shorts_factory.quality.content_contract import has_concrete_anchor, is_question
 from shorts_factory.quality.korean_register import (
     _NAMING_CLOSE,
     DEICTIC,
@@ -182,3 +183,55 @@ def test_light_verb_catches_the_reported_sentence(config: AppConfig) -> None:
     assert LIGHT_VERB.findall("제어부가 목적지 분류를 수행합니다.")
     # A real verb must not be flagged just for having a subject.
     assert not LIGHT_VERB.findall("중력이 지폐를 아래로 끌어내립니다.")
+
+
+# -- the hook --------------------------------------------------------------
+
+
+def test_a_causal_clause_is_not_a_question() -> None:
+    """The gate matched bare "까", so any sentence with ~니까 counted as asking."""
+    assert not is_question("지폐가 들어오니까 롤러가 움직입니다.")
+    assert not is_question("문이 닫히니까 안전합니다.")
+    assert not is_question("깨끗해진 물만 강으로 나갑니다.")
+
+
+def test_real_questions_are_recognised() -> None:
+    assert is_question("ATM은 돈을 어떻게 세는 걸까요?")
+    assert is_question("계단은 끝에서 어디로 갈까요?")
+    assert is_question("그럼 맞지 않는 건 어떻게 될까요?")
+
+
+def test_a_statement_opens_the_video_if_it_is_specific_enough() -> None:
+    """The benchmark's own opening is declarative, and it works.
+
+    A rule of "must pose a question" rejects the reference material, which is
+    the same mistake as requiring every sentence to be showable in one shot.
+    """
+    benchmark_opening = "서울에서 하루 동안 사용하고 버린 물은 네 곳의 물재생센터로 모입니다."
+    assert not is_question(benchmark_opening)
+    assert has_concrete_anchor(benchmark_opening)
+
+
+def test_a_particle_is_not_a_quantity() -> None:
+    """만 is the numeral 10,000 and also the particle "only"."""
+    assert not has_concrete_anchor("깨끗해진 물만 강으로 나갑니다.")
+    assert has_concrete_anchor("하루 100만 톤의 물이 이곳을 지납니다.")
+    assert has_concrete_anchor("여기서는 두 가지 방식이 함께 쓰입니다.")
+
+
+def test_the_benchmark_opening_fits_the_hook_budget(config: AppConfig) -> None:
+    """A budget the reference cannot meet forces a generic stub question."""
+    from shorts_factory.utils import estimate_duration_sec
+
+    opening = "서울에서 하루 동안 사용하고 버린 물은 네 곳의 물재생센터로 모입니다."
+    spoken = estimate_duration_sec(opening, config.settings.script.chars_per_sec)
+    assert spoken <= config.content_contract.hook.max_seconds
+
+
+def test_a_hook_that_is_not_the_first_beat_is_rejected(config: AppConfig, settings) -> None:
+    """Checking one string and speaking another ships the unchecked one."""
+    from shorts_factory.quality.content_contract import check_hook
+
+    script = load("good_atm").model_copy(update={"hook": "완전히 다른 훅 문장일까요?"})
+    codes_found = {i.code for i in check_hook(script, config.content_contract, settings.script)}
+    assert "hook_not_first_beat" in codes_found

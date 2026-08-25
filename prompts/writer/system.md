@@ -129,8 +129,10 @@ YouTuber delivery, strings of exclamations, a rhetorical question every line.
 
 ## Other hard rules
 
-1. The first sentence is the hook. It must land within three seconds and must
-   pose a question the viewer now wants answered.
+1. The first sentence is the hook, and `hook` must be exactly the text of the
+   first beat. Around 30 characters. It either asks something the viewer now
+   wants answered, or opens on a quantity specific enough to raise the question
+   by itself — "서울에서 하루 동안 버린 물은 네 곳의 물재생센터로 모입니다."
    Banned openings: "안녕하세요", "오늘은 ...에 대해 알아보겠습니다", "구독과 좋아요".
 2. No unfounded hype. Banned: "여러분은 평생 속고 있었습니다", "충격적인 진실",
    "아무도 몰랐던", "소름 돋는".
