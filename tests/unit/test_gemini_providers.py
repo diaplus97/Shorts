@@ -1,4 +1,4 @@
-"""Gemini search and Imagen: request shape, response walking, failure modes.
+"""The four Gemini providers: request shape, response walking, failure modes.
 
 No network is touched -- every test drives the provider through an
 ``httpx.MockTransport``. That covers what this repository is answerable for:
@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from shorts_factory.errors import ContentBlockedError, ProviderError
 from shorts_factory.providers.image.gemini import (
@@ -22,19 +23,21 @@ from shorts_factory.providers.image.gemini import (
     _closest_ratio,
     find_image_bytes,
 )
+from shorts_factory.providers.llm.gemini import GeminiLLMProvider, to_gemini_schema
 from shorts_factory.providers.search.gemini import (
     GeminiSearchProvider,
     find_grounding_chunks,
     snippets_by_chunk,
 )
+from shorts_factory.providers.tts.gemini import GeminiTTSProvider, wav_from_pcm
 
 IMAGE_BYTES = b"\x89PNG\r\n\x1a\nfake"
 
 
 @pytest.fixture(autouse=True)
 def _api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SEARCH_API_KEY", "test-key")
-    monkeypatch.setenv("IMAGE_API_KEY", "test-key")
+    for name in ("SEARCH_API_KEY", "IMAGE_API_KEY", "LLM_API_KEY", "TTS_API_KEY"):
+        monkeypatch.setenv(name, "test-key")
     # The transports below are MockTransports, so nothing leaves the process.
     monkeypatch.setenv("ALLOW_LIVE_API_TESTS", "1")
 
@@ -322,3 +325,257 @@ def test_pixel_size_maps_to_the_nearest_ratio() -> None:
     assert _closest_ratio(1920, 1080, "1:1") == "16:9"
     assert _closest_ratio(1024, 1024, "9:16") == "1:1"
     assert _closest_ratio(0, 0, "9:16") == "9:16"
+
+
+# -- LLM -------------------------------------------------------------------
+
+
+def llm_provider(handler, **kwargs) -> GeminiLLMProvider:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return GeminiLLMProvider(model="gemini-2.5-flash", client=client, **kwargs)
+
+
+class Inner(BaseModel):
+    label: str
+    score: float | None = None
+
+
+class Outer(BaseModel):
+    title: str
+    items: list[Inner]
+    note: str | None = None
+
+
+def reply(text: str, **extra) -> dict:
+    body = {"candidates": [{"content": {"parts": [{"text": text}]}, "finishReason": "STOP"}]}
+    body.update(extra)
+    return body
+
+
+def test_the_schema_is_translated_into_geminis_subset() -> None:
+    """Gemini has no $ref resolution and rejects several Pydantic keywords.
+
+    Sending the raw model_json_schema() is a 400. Dropping the keywords costs
+    nothing: the reply is validated against the real Pydantic model afterwards.
+    """
+    translated = to_gemini_schema(Outer.model_json_schema())
+    flat = json.dumps(translated)
+
+    assert "$ref" not in flat
+    assert "$defs" not in flat
+    assert "additionalProperties" not in flat
+    # The structure has to survive the stripping.
+    assert translated["properties"]["title"]["type"] == "string"
+    assert translated["properties"]["items"]["items"]["properties"]["label"]["type"] == "string"
+
+
+def test_an_optional_field_becomes_nullable_not_an_anyof() -> None:
+    """Pydantic writes `X | None` as anyOf[..., null]; Gemini wants nullable."""
+    translated = to_gemini_schema(Outer.model_json_schema())
+    note = translated["properties"]["note"]
+    assert note.get("nullable") is True
+    assert "anyOf" not in note
+
+
+def test_a_self_referential_schema_does_not_inline_forever() -> None:
+    class Node(BaseModel):
+        name: str
+        child: Node | None = None
+
+    Node.model_rebuild()
+    translated = to_gemini_schema(Node.model_json_schema())
+    assert isinstance(translated, dict)
+
+
+async def test_llm_asks_for_json_and_returns_the_parsed_object() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        seen["url"] = str(request.url)
+        return httpx.Response(
+            200,
+            json=reply(
+                '{"title": "a", "items": []}',
+                usageMetadata={"promptTokenCount": 11, "candidatesTokenCount": 7},
+            ),
+        )
+
+    result = await llm_provider(handler).generate_json(
+        system_prompt="be terse", user_prompt="write it", schema=Outer
+    )
+
+    assert seen["url"].endswith("/models/gemini-2.5-flash:generateContent")
+    assert seen["body"]["systemInstruction"]["parts"][0]["text"] == "be terse"
+    assert seen["body"]["generationConfig"]["responseMimeType"] == "application/json"
+    assert result.data == {"title": "a", "items": []}
+    assert result.usage.input_tokens == 11
+    assert result.usage.output_tokens == 7
+
+
+async def test_a_rejected_schema_falls_back_to_plain_json_mode() -> None:
+    """Losing schema enforcement beats failing the run; validation still happens."""
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "responseSchema" in body["generationConfig"]:
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "code": 400,
+                        "message": "Invalid JSON payload received. Unknown name responseSchema.",
+                        "status": "INVALID_ARGUMENT",
+                    }
+                },
+            )
+        return httpx.Response(200, json=reply('{"title": "a", "items": []}'))
+
+    result = await llm_provider(handler).generate_json(
+        system_prompt="be terse", user_prompt="write it", schema=Outer
+    )
+    assert len(bodies) == 2
+    # The schema moves into the prompt so the model still knows the shape.
+    assert (
+        "Respond with JSON matching this schema"
+        in bodies[-1]["systemInstruction"]["parts"][0]["text"]
+    )
+    assert result.data["title"] == "a"
+
+
+async def test_a_code_fence_around_the_json_is_tolerated() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=reply('```json\n{"title": "a", "items": []}\n```'))
+
+    result = await llm_provider(handler).generate_json(
+        system_prompt="s", user_prompt="u", schema=Outer
+    )
+    assert result.data["title"] == "a"
+
+
+async def test_a_safety_block_is_reported_as_such() -> None:
+    """An empty reply with a block reason is not "the API broke"."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"promptFeedback": {"blockReason": "SAFETY"}})
+
+    with pytest.raises(ProviderError, match="refused"):
+        await llm_provider(handler).generate_json(system_prompt="s", user_prompt="u", schema=Outer)
+
+
+async def test_non_json_text_is_a_clear_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=reply("I am afraid I cannot do that."))
+
+    with pytest.raises(ProviderError, match="not JSON"):
+        await llm_provider(handler).generate_json(system_prompt="s", user_prompt="u", schema=Outer)
+
+
+# -- TTS -------------------------------------------------------------------
+
+
+def tts_provider(handler, **kwargs) -> GeminiTTSProvider:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return GeminiTTSProvider(model="gemini-2.5-flash-preview-tts", client=client, **kwargs)
+
+
+def audio_reply(pcm: bytes) -> dict:
+    return {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": "audio/L16;rate=24000",
+                                "data": base64.b64encode(pcm).decode("ascii"),
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+
+async def test_tts_writes_a_wav_that_ffprobe_can_read(tmp_path: Path) -> None:
+    """Gemini returns headerless PCM; saved raw it is a file with no stream.
+
+    The audio QA downstream would then report silence and blame the voice,
+    which is a confusing way to discover a missing container.
+    """
+    pcm = b"\x01\x00" * 2400  # 0.1s of 16-bit mono at 24 kHz
+    target = tmp_path / "voice.wav"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=audio_reply(pcm))
+
+    result = await tts_provider(handler).synthesize("안녕하세요", target)
+
+    written = Path(result.path).read_bytes()
+    assert written[:4] == b"RIFF"
+    assert written[8:12] == b"WAVE"
+    assert written.endswith(pcm)
+    assert result.characters == len("안녕하세요")
+
+
+def test_the_wav_header_declares_the_right_rate_and_size() -> None:
+    """A wrong rate plays the voice at the wrong pitch while durations pass."""
+    import struct
+
+    pcm = b"\x00\x01" * 100
+    wav = wav_from_pcm(pcm, sample_rate=24000)
+
+    (chunk_size,) = struct.unpack("<I", wav[4:8])
+    channels, rate, byte_rate, block_align, bits = struct.unpack("<HHIIHH", wav[20:36])[1:]
+    (data_size,) = struct.unpack("<I", wav[40:44])
+
+    assert chunk_size == 36 + len(pcm)
+    assert rate == 24000
+    assert channels == 1
+    assert bits == 16
+    assert byte_rate == 24000 * 2
+    assert block_align == 2
+    assert data_size == len(pcm)
+
+
+async def test_tts_sends_the_voice_and_the_style_instruction(tmp_path: Path) -> None:
+    """Gemini takes delivery direction in the prompt, not as a parameter."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=audio_reply(b"\x00\x00" * 10))
+
+    provider = tts_provider(handler, voice="Kore", style_instruction="차분하게 읽어주세요.")
+    await provider.synthesize("지폐가 들어옵니다.", tmp_path / "a.wav")
+
+    config = seen["body"]["generationConfig"]
+    assert config["responseModalities"] == ["AUDIO"]
+    assert config["speechConfig"]["voiceConfig"]["prebuiltVoiceConfig"]["voiceName"] == "Kore"
+    spoken = seen["body"]["contents"][0]["parts"][0]["text"]
+    assert "차분하게 읽어주세요." in spoken
+    assert "지폐가 들어옵니다." in spoken
+
+
+@pytest.mark.parametrize("payload", ["", "   "])
+async def test_an_empty_audio_payload_is_an_error_not_a_silent_file(
+    payload: str, tmp_path: Path
+) -> None:
+    """A zero-length wav passes every structural check and plays nothing.
+
+    ffprobe reports a valid file with a stream of zero duration, so this has to
+    fail here rather than surface later as "the narration is silent".
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"candidates": [{"content": {"parts": [{"inlineData": {"data": payload}}]}}]},
+        )
+
+    with pytest.raises(ProviderError, match=r"no audio|empty audio"):
+        await tts_provider(handler).synthesize("안녕", tmp_path / "a.wav")
+    assert not (tmp_path / "a.wav").exists()

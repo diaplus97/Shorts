@@ -57,6 +57,8 @@ class LLMSettings(BaseModel):
     max_output_tokens: int = 8000
     timeout_sec: float = 120.0
     structured_output_retries: int = 1
+    #: Used by the gemini provider only.
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
 
 
 class SearchSettings(BaseModel):
@@ -146,6 +148,12 @@ class TTSSettings(BaseModel):
     voice: str = "default"
     format: str = "wav"
     sample_rate: int = 24000
+
+    # -- Gemini -----------------------------------------------------------
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    #: Gemini takes delivery direction in the prompt rather than as parameters.
+    #: This is where the tone profile reaches it.
+    style_instruction: str = ""
 
 
 class ScriptSettings(BaseModel):

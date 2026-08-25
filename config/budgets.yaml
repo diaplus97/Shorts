@@ -36,6 +36,13 @@ pricing:
     openai:
       input_usd_per_1k_tokens: 0.00015
       output_usd_per_1k_tokens: 0.0006
+
+    # Gemini 2.5 Flash. Same sourcing caveat as the search rates below: taken
+    # from search-result summaries, not from Google's pricing pages, which are
+    # unreachable from the build environment.
+    gemini:
+      input_usd_per_1k_tokens: 0.0003
+      output_usd_per_1k_tokens: 0.0025
   search:
     mock:
       usd_per_query: 0.0

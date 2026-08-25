@@ -14,10 +14,12 @@ from ..errors import ConfigError
 from .base import ImageProvider, LLMProvider, SearchProvider, TTSProvider, VideoProvider
 from .image.gemini import GeminiImageProvider
 from .image.mock import MockImageProvider
+from .llm.gemini import GeminiLLMProvider
 from .llm.mock import MockLLMProvider
 from .llm.openai import OpenAILLMProvider
 from .search.gemini import GeminiSearchProvider
 from .search.mock import MockSearchProvider
+from .tts.gemini import GeminiTTSProvider
 from .tts.mock import MockTTSProvider
 from .tts.openai import OpenAITTSProvider
 from .video.mock import MockVideoProvider
@@ -73,7 +75,18 @@ def build_llm(config: AppConfig) -> LLMProvider:
             max_output_tokens=llm.max_output_tokens,
             timeout_sec=llm.timeout_sec,
         )
-    raise ConfigError(f"unknown llm provider '{name}'; available: mock, openai")
+    if name == "gemini":
+        return GeminiLLMProvider(
+            model=llm.model,
+            base_url=llm.base_url,
+            temperature=llm.temperature,
+            max_output_tokens=llm.max_output_tokens,
+            timeout_sec=llm.timeout_sec,
+        )
+    raise ConfigError(
+        f"unknown llm provider '{name}'; available: mock, openai, gemini. "
+        "Run scripts/list_gemini_models.py --kind llm to see which models your key can use."
+    )
 
 
 def build_search(config: AppConfig) -> SearchProvider:
@@ -176,6 +189,14 @@ def build_tts(config: AppConfig) -> TTSProvider:
             model=tts.model,
             voice=tts.voice,
             audio_format=tts.format,
+        )
+    if name == "gemini":
+        return GeminiTTSProvider(
+            model=tts.model,
+            voice=tts.voice,
+            base_url=tts.base_url,
+            sample_rate=tts.sample_rate,
+            style_instruction=tts.style_instruction,
         )
     raise ConfigError(f"unknown tts provider '{name}'; available: mock, openai")
 

@@ -10,18 +10,29 @@
 # Nested keys merge; lists replace. `shorts doctor` prints which override files
 # are in effect, and `shorts config` prints the merged result.
 
+# Everything on one Gemini key. Put that key in .env under all five names:
+# LLM_API_KEY, SEARCH_API_KEY, IMAGE_API_KEY, VIDEO_API_KEY, TTS_API_KEY.
+# They are separate so one can be rotated, or pointed at another vendor,
+# without touching the others.
 providers:
-  search: gemini      # real sources instead of example.invalid
-  image: gemini       # Imagen, so a still matches the clips around it
+  llm: gemini
+  search: gemini
+  image: gemini
   video: veo
+  tts: gemini
+
+# Run `python scripts/list_gemini_models.py` first and use ids from its output.
+# A model missing from that list is not available to your key, whatever the
+# documentation says.
+
+llm:
+  model: gemini-2.5-flash
 
 search:
-  # Run `python scripts/list_gemini_models.py --kind llm` and use an id from
-  # there. A 3.x model grounds at 2.5x lower cost with a larger free tier.
+  # A 3.x model grounds at roughly 2.5x lower cost with a larger free tier.
   model: gemini-2.5-flash
 
 image:
-  # `python scripts/list_gemini_models.py --kind image`
   model: imagen-4.0-generate-001
 
 video:
@@ -32,9 +43,15 @@ video:
   # A real Veo job takes minutes; 2s polling just burns requests.
   poll_interval_sec: 15
 
-# Real script writing and a real voice. Both need OPENAI_API_KEY, and both are
-# required for final.mp4: the production gate treats a mock LLM or a mock voice
-# as contaminating the output whether or not it appears in the asset ledger.
-# providers:
-#   llm: openai
-#   tts: openai
+tts:
+  model: gemini-2.5-flash-preview-tts
+  # `python scripts/list_gemini_models.py --kind tts` for what is available.
+  voice: Kore
+  # Gemini takes delivery direction in the prompt rather than as parameters.
+  # Keep this in step with config/voice.yaml's tone profile.
+  style_instruction: >
+    차분하고 호기심 있는 다큐멘터리 내레이터로, 친구에게 흥미로운 것을
+    설명하듯 읽어주세요. 과장하지 말고, 문장 사이는 자연스럽게 쉬어주세요.
+
+# OpenAI is still wired for llm and tts if you would rather use it; set
+# providers.llm/tts to "openai" and put OPENAI_API_KEY and TTS_API_KEY in .env.

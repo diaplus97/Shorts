@@ -23,6 +23,7 @@ from .files import ensure_dir
 _SECRET_KEY_PATTERN = re.compile(r"(key|token|secret|password|authorization)", re.IGNORECASE)
 _SECRET_ENV_NAMES = (
     "OPENAI_API_KEY",
+    "LLM_API_KEY",
     "SEARCH_API_KEY",
     "IMAGE_API_KEY",
     "VIDEO_API_KEY",

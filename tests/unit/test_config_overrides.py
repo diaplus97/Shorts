@@ -98,13 +98,31 @@ def test_local_override_path_naming() -> None:
 
 
 def test_the_shipped_example_is_a_working_override(config_copy: Path, config_dir: Path) -> None:
-    """The example is the first thing anyone copies; it must actually load."""
+    """The example is the first thing anyone copies; it must actually load.
+
+    It deliberately turns on every real provider -- that is the recipe for a
+    run that can reach final.mp4, since the production gate treats a mock in
+    any content-critical slot as contaminating the output. What must stay safe
+    is the *committed* settings.yaml, which is asserted separately below.
+    """
     example = config_dir / "settings.local.yaml.example"
     assert example.exists(), "config/settings.local.yaml.example is missing"
     shutil.copy(example, config_copy / "settings.local.yaml")
 
     config = load_config(config_copy, load_env=False)
-    assert config.settings.providers.video == "veo"
+    providers = config.settings.providers.as_dict()
+    assert "mock" not in providers.values(), (
+        f"the example leaves a mock provider in place: {providers}"
+    )
     assert config.settings.video.allowed_durations == [4.0, 6.0, 8.0]
-    # The example must not quietly switch on a paid LLM as well.
-    assert config.settings.providers.llm == "mock"
+
+
+def test_the_committed_config_spends_nothing(config_copy: Path) -> None:
+    """A fresh checkout must not be able to reach a paid API by accident.
+
+    This is the property the example above is allowed to override, and the
+    reason overriding is done in a gitignored file rather than by editing
+    settings.yaml.
+    """
+    config = load_config(config_copy, load_env=False)
+    assert set(config.settings.providers.as_dict().values()) == {"mock"}
