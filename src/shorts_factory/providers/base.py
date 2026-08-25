@@ -203,7 +203,17 @@ async def with_retry(operation: str, func: Any, settings: RetrySettings) -> Any:
         with attempt:
             attempt_number += 1
             if attempt_number > 1:
-                log.warning("provider_retry", operation=operation, attempt=attempt_number)
+                # Without the reason this line says a call is being repeated and
+                # not why, so four identical rate-limit failures look like four
+                # unexplained ones. The message names the quota that was hit.
+                outcome = attempt.retry_state.outcome
+                previous = outcome.exception() if outcome else None
+                log.warning(
+                    "provider_retry",
+                    operation=operation,
+                    attempt=attempt_number,
+                    reason=str(previous)[:400] if previous else "unknown",
+                )
             return await func()
     raise ProviderError(f"{operation} exhausted retries")  # pragma: no cover - defensive
 
