@@ -11,9 +11,11 @@ from pydantic import BaseModel, ConfigDict
 
 from ..config import AudioSettings, OutputSettings, SubtitleSettings
 from ..errors import MediaError
-from ..utils import atomic_write_text, ensure_dir
+from ..utils import atomic_write_text, ensure_dir, get_logger
 from .ffmpeg import escape_filter_path, has_filter, run_async
 from .subtitles import force_style
+
+log = get_logger(__name__)
 
 
 def write_concat_list(clips: list[Path], path: str | Path) -> Path:
@@ -87,13 +89,31 @@ def build_audio_filter(
     return f"{';'.join(chains)};{mix}{tail}"
 
 
-def build_watermark_filter(text: str, font_name: str) -> str:
-    """Top-left burned-in label. Used to mark a run that is not production."""
-    escaped = text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "")
-    return (
-        f"drawtext=text='{escaped}':font='{font_name}':fontsize=44:fontcolor=white@0.92"
-        ":x=48:y=48:box=1:boxcolor=black@0.55:boxborderw=18"
+def build_watermark_filter(text: str, font_name: str, *, can_draw_text: bool | None = None) -> str:
+    """Burned-in mark saying this render is not production.
+
+    ``drawtext`` needs ffmpeg built with libfreetype, and common static builds
+    ship without it -- the johnvansickle 7.0.2 binary fails with "No such
+    filter: 'drawtext'". Losing the mark entirely is the wrong answer: the
+    whole reason it exists is that a preview must never pass for a real Short.
+    So without drawtext it degrades to a bar of colour, which needs no font,
+    rather than to nothing.
+    """
+    if can_draw_text is None:
+        can_draw_text = has_filter("drawtext")
+    if can_draw_text:
+        escaped = text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "")
+        return (
+            f"drawtext=text='{escaped}':font='{font_name}':fontsize=44:fontcolor=white@0.92"
+            ":x=48:y=48:box=1:boxcolor=black@0.55:boxborderw=18"
+        )
+    log.warning(
+        "watermark_text_unavailable",
+        detail="this ffmpeg has no 'drawtext' filter (needs libfreetype); "
+        "marking the preview with a magenta border instead",
     )
+    # Unmissable, and impossible to confuse with a finished Short.
+    return "drawbox=x=0:y=0:w=iw:h=ih:color=magenta@0.9:t=24"
 
 
 def build_video_filter(

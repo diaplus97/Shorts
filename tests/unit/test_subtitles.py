@@ -107,3 +107,37 @@ def test_ass_declares_the_output_resolution(context, settings) -> None:
     # A top-positioned cue uses the alternate style.
     assert "Style: Top," in text
     assert any(line.startswith("Dialogue:") and ",Top," in line for line in text.splitlines())
+
+
+# -- the mock watermark ----------------------------------------------------
+
+
+def test_the_watermark_survives_an_ffmpeg_without_drawtext() -> None:
+    """Common static ffmpeg builds ship without libfreetype.
+
+    A live run hit "No such filter: 'drawtext'" and compose died. Losing the
+    mark silently would be worse than the crash -- it exists so a preview can
+    never pass for a finished Short -- so it degrades to a border, which needs
+    no font.
+    """
+    from shorts_factory.media.compose import build_watermark_filter
+
+    with_text = build_watermark_filter("MOCK PIPELINE", "Noto Sans CJK KR", can_draw_text=True)
+    assert with_text.startswith("drawtext=")
+    assert "MOCK PIPELINE" in with_text
+
+    without = build_watermark_filter("MOCK PIPELINE", "Noto Sans CJK KR", can_draw_text=False)
+    assert "drawtext" not in without
+    assert without.startswith("drawbox=")
+    # Whatever it degrades to has to be impossible to miss.
+    assert "magenta" in without
+
+
+def test_a_production_render_never_needs_drawtext() -> None:
+    """final.mp4 carries no watermark, so a missing filter cannot block it."""
+    from shorts_factory.config import SubtitleSettings
+    from shorts_factory.media.compose import build_video_filter
+
+    video_filter = build_video_filter(None, SubtitleSettings(), watermark=None)
+    assert "drawtext" not in video_filter
+    assert "drawbox" not in video_filter

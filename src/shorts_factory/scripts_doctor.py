@@ -82,6 +82,16 @@ def check_ffmpeg() -> bool:
         _ok("ffmpeg has the 'subtitles' filter (libass) for burn-in")
     else:
         _warn("no 'subtitles' filter; set subtitles.burn_in: false or install a full ffmpeg")
+    # Only the mock preview's watermark needs this, so it is not fatal -- but
+    # doctor passing and compose then dying on a missing filter is exactly the
+    # failure this command exists to prevent.
+    if ffmpeg.has_filter("drawtext"):
+        _ok("ffmpeg has the 'drawtext' filter for the mock preview watermark")
+    else:
+        _warn(
+            "no 'drawtext' filter (needs libfreetype); mock previews will be marked "
+            "with a magenta border instead of text. final.mp4 is unaffected"
+        )
     return True
 
 
