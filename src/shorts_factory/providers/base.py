@@ -184,6 +184,24 @@ class TTSProvider(Protocol):
 # --------------------------------------------------------------------------
 
 
+#: A 429 that will still be a 429 after any amount of backing off. A spending
+#: cap or a disabled billing account is an account setting, not congestion, so
+#: retrying it four times only delays the message that says so.
+PERMANENT_429_PHRASES = (
+    "spending cap",
+    "spend cap",
+    "billing account",
+    "billing is not enabled",
+    "has been disabled",
+)
+
+
+def is_retryable_429(body: str) -> bool:
+    """Whether backing off could plausibly change a 429 into something else."""
+    lowered = body.lower()
+    return not any(phrase in lowered for phrase in PERMANENT_429_PHRASES)
+
+
 def is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, ProviderError) and exc.retryable
 

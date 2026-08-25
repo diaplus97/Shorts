@@ -18,6 +18,7 @@ import pytest
 from pydantic import BaseModel
 
 from shorts_factory.errors import ContentBlockedError, ProviderError
+from shorts_factory.providers.base import is_retryable_429
 from shorts_factory.providers.image.gemini import (
     GeminiImageProvider,
     _closest_ratio,
@@ -585,3 +586,43 @@ async def test_an_empty_audio_payload_is_an_error_not_a_silent_file(
     with pytest.raises(ProviderError, match=r"no audio|empty audio"):
         await tts_provider(handler).synthesize("안녕", tmp_path / "a.wav")
     assert not (tmp_path / "a.wav").exists()
+
+
+# -- rate limits that are not rate limits ----------------------------------
+
+
+def test_a_spending_cap_429_is_not_retried() -> None:
+    """The first live run backed off four times against an account setting.
+
+    "Your project has exceeded its monthly spending cap" is the same answer
+    after any amount of waiting, so retrying only delays the message that says
+    what to actually do.
+    """
+    cap = (
+        '{"error": {"code": 429, "message": "Your project has exceeded its '
+        'monthly spending cap. Please go to AI Studio at https://ai.studio/spend"}}'
+    )
+    assert not is_retryable_429(cap)
+    assert not is_retryable_429('{"error": {"message": "billing account is not active"}}')
+    # A genuine per-minute limit still gets its retries.
+    assert is_retryable_429('{"error": {"message": "Quota exceeded for requests per minute"}}')
+
+
+async def test_the_provider_marks_a_spending_cap_as_final() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            json={
+                "error": {
+                    "code": 429,
+                    "message": "Your project has exceeded its monthly spending cap.",
+                    "status": "RESOURCE_EXHAUSTED",
+                }
+            },
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        await search_provider(handler).search("anything", max_results=5)
+    assert caught.value.retryable is False
+    # The message has to carry the sentence that says what to do about it.
+    assert "spending cap" in str(caught.value)

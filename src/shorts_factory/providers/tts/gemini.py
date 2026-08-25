@@ -30,7 +30,12 @@ import httpx
 
 from ...errors import ProviderError
 from ...utils import ensure_dir, get_logger
-from ..base import TTSResult, assert_live_calls_allowed, require_secret
+from ..base import (
+    TTSResult,
+    assert_live_calls_allowed,
+    is_retryable_429,
+    require_secret,
+)
 
 log = get_logger(__name__)
 
@@ -123,7 +128,8 @@ class GeminiTTSProvider:
             raise ProviderError(
                 f"Gemini TTS HTTP {response.status_code}: {response.text[:400]}",
                 provider=self.name,
-                retryable=response.status_code == 429 or response.status_code >= 500,
+                retryable=(response.status_code == 429 and is_retryable_429(response.text))
+                or response.status_code >= 500,
             )
         try:
             return dict(response.json())
