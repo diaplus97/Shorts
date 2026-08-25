@@ -265,3 +265,85 @@ def test_no_prompt_asks_for_a_drawing_and_a_photograph_at_once(config: AppConfig
         assert not (drawn and "photorealistic" in combined), (
             f"reality_type '{name}' asks for a drawing and a photograph in one prompt"
         )
+
+
+# -- still images ----------------------------------------------------------
+
+
+def make_still_scene():
+    from tests.factories import make_scene
+
+    return make_scene(
+        id="S09",
+        asset_type="image_motion",
+        visible_change="interior transport path → the closed front panel again",
+        camera_path="reverse of the opening move, pulling back out",
+        action="the cutaway closes back into the intact machine",
+    )
+
+
+def test_a_still_is_not_ordered_with_camera_moves(config: AppConfig) -> None:
+    """A frame has no camera move and no "change during the shot".
+
+    The fallback used to receive the video prompt verbatim, so a still was
+    asked for motion it cannot have -- part of why it never matched the clips
+    on either side of it.
+    """
+    from shorts_factory.providers.video.prompt_adapter import GenericPromptAdapter
+
+    adapter = GenericPromptAdapter(config.visual_styles)
+    still = adapter.build_still_prompt(make_still_scene())
+
+    for motion in (
+        "camera:",
+        "visible change during the shot",
+        "physically possible camera motion",
+        "physically plausible materials and motion",
+    ):
+        assert motion not in still, f"still prompt still asks for {motion!r}"
+    assert "a single still frame" in still
+
+
+def test_a_still_shows_the_state_the_shot_lands_on(config: AppConfig) -> None:
+    """A still belongs at the end of the movement, where the next scene starts."""
+    from shorts_factory.providers.video.prompt_adapter import GenericPromptAdapter
+
+    adapter = GenericPromptAdapter(config.visual_styles)
+    still = adapter.build_still_prompt(make_still_scene())
+
+    assert "the moment shown: the closed front panel again" in still
+    # Not the state it started from.
+    assert "interior transport path →" not in still
+
+
+def test_a_still_keeps_the_world_it_shares(config: AppConfig) -> None:
+    """Dropping motion must not drop what makes it the same place."""
+    from tests.factories import make_scenes
+
+    from shorts_factory.providers.video.prompt_adapter import GenericPromptAdapter
+
+    plan = make_scenes(3, "고무 롤러가 지폐를 끌어당깁니다.", total=12.0)
+    adapter = GenericPromptAdapter(config.visual_styles)
+    still = adapter.build_still_prompt(plan.scenes[0], plan)
+
+    assert "same machine and location throughout" in still
+    assert plan.scenes[0].environment in still
+
+
+def test_a_still_is_reused_rather_than_rebought(config: AppConfig) -> None:
+    """The reuse hash has to be computed from the prompt actually sent.
+
+    The still prompt differs from the video prompt, so hashing the video one
+    made every still miss the reuse check and be re-billed on each resume.
+    """
+    from tests.factories import make_scenes
+
+    from shorts_factory.providers.video.prompt_adapter import GenericPromptAdapter
+
+    plan = make_scenes(3, "고무 롤러가 지폐를 끌어당깁니다.", total=12.0)
+    adapter = GenericPromptAdapter(config.visual_styles)
+    scene = plan.scenes[0]
+
+    assert adapter.build_still_prompt(scene, plan) != adapter.build_prompt(scene, plan), (
+        "if these were identical the regression this guards could not happen"
+    )

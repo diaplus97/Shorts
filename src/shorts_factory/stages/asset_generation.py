@@ -231,11 +231,15 @@ async def generate_scene(
 ) -> AssetRecord:
     adapter = context.providers.prompt_adapter
     prompt = adapter.build_prompt(scene, plan)
+    # A still is ordered from its own prompt, so its hash has to be computed
+    # from that one. Hashing the video prompt instead made every still miss the
+    # reuse check and be re-billed on every resume.
+    still_prompt = adapter.build_still_prompt(scene, plan)
     negative = adapter.build_negative_prompt(scene)
 
     hashes = {
         video_hash(context, scene, prompt, negative),
-        image_hash(context, scene, prompt, negative),
+        image_hash(context, scene, still_prompt, negative),
     }
     existing = ledger.get(scene.id)
     if existing is not None and not context.force and can_reuse(context, existing, hashes):
@@ -293,7 +297,10 @@ async def generate_scene(
     fallback = wants_video(scene)
     if fallback:
         context.log.warning("scene_fallback_to_image", scene=scene.id, reason=last_error)
-    record = await generate_image_asset(context, scene, prompt, negative, fallback=fallback)
+    # A frame has no camera move and no "change during the shot". Passing the
+    # video prompt verbatim asked a still for both, which is part of why a
+    # fallback never matched the clips on either side of it.
+    record = await generate_image_asset(context, scene, still_prompt, negative, fallback=fallback)
     record.error = last_error
     return record
 

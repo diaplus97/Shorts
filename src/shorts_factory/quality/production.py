@@ -14,7 +14,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import AppConfig
-from ..domain import AssetLedger, ScenePlan
+from ..domain import AssetLedger, AssetType, ScenePlan
 from ..errors import MediaError
 from ..media import MediaInfo, analyze_audio, audio_problems, probe
 from ..providers import ProviderSet
@@ -55,9 +55,46 @@ class ProductionReadinessResult(BaseModel):
         return "\n".join(lines)
 
 
-def mock_provider_kinds(providers: ProviderSet) -> list[str]:
-    """Which provider slots are still filled by a mock."""
-    return sorted(kind for kind, provider in providers.as_dict().items() if provider.is_mock)
+#: Kinds whose mock contaminates the output whether or not it appears in the
+#: asset ledger. A mock LLM fabricates the script, mock search fabricates the
+#: sources it rests on, and a mock voice is the audio track itself.
+ALWAYS_BLOCKING = ("llm", "search", "tts")
+
+#: Kinds that only reach the output through an asset. An unused image provider
+#: has contributed nothing, so blocking on it makes final.mp4 unreachable for a
+#: run whose scenes all came back as real video.
+ASSET_KINDS = {"image": (AssetType.IMAGE, AssetType.IMAGE_MOTION), "video": (AssetType.VIDEO,)}
+
+
+def mock_provider_kinds(providers: ProviderSet, ledger: AssetLedger | None = None) -> list[str]:
+    """Which mock providers actually contaminate this run's output.
+
+    Without a ledger this is every mock slot, which is the safe answer when
+    there is nothing to check against. With one, an asset provider counts only
+    if it produced a usable asset: the shipped config has no real image
+    provider, so a run with real video for every scene was still refused
+    final.mp4 on account of an image provider it never called.
+    """
+    mocks = {kind for kind, provider in providers.as_dict().items() if provider.is_mock}
+    if ledger is None:
+        return sorted(mocks)
+
+    contributing: set[str] = set()
+    for kind in mocks:
+        if kind in ALWAYS_BLOCKING:
+            contributing.add(kind)
+            continue
+        wanted = ASSET_KINDS.get(kind)
+        if wanted is None:
+            contributing.add(kind)
+            continue
+        provider_name = providers.as_dict()[kind].name
+        if any(
+            record.is_usable and record.provider == provider_name and record.asset_type in wanted
+            for record in ledger.records.values()
+        ):
+            contributing.add(kind)
+    return sorted(contributing)
 
 
 def missing_scene_ids(plan: ScenePlan, ledger: AssetLedger) -> list[str]:
@@ -89,7 +126,7 @@ def assess(
     voice_path: Path | None = None,
 ) -> ProductionReadinessResult:
     """Judge one run. Paths that do not exist yet are simply not asserted on."""
-    mocks = mock_provider_kinds(providers)
+    mocks = mock_provider_kinds(providers, ledger)
     missing = missing_scene_ids(plan, ledger)
 
     result = ProductionReadinessResult(
