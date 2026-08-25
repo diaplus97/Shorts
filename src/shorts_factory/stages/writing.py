@@ -9,7 +9,15 @@ from __future__ import annotations
 from ..domain import ResearchResult, ScriptResult
 from ..pipeline.checkpoint import require_research, save_project, save_script
 from ..pipeline.context import RunContext
-from ..quality import QAIssue, check_script, check_script_contract, check_script_traceability
+from ..quality import (
+    QAIssue,
+    check_beat_arc,
+    check_causal_linkage,
+    check_korean_register,
+    check_script,
+    check_script_contract,
+    check_script_traceability,
+)
 from ..utils import atomic_write_text, relative_to
 from ._llm import structured_call
 from ._plan import PlannedCall, StagePlan
@@ -86,6 +94,12 @@ async def run(context: RunContext) -> ScriptResult:
             *check_script(result, settings),
             *check_script_traceability(result, research),
             *check_script_contract(result, research, contract, settings.script),
+            # Structure and language. These run inside the retry loop on purpose:
+            # a scrambled arc or a narration made of pronouns is worth spending
+            # the retry on, because neither is recoverable downstream.
+            *check_beat_arc(result, contract),
+            *check_causal_linkage(result, contract),
+            *check_korean_register(result, contract),
         ]
 
     script, prompt = await structured_call(

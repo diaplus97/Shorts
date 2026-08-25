@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "title": "번역투 대본",
+  "hook": "택배 상자는 어떻게 목적지를 찾아갈까요?",
+  "narration": "택배 상자는 어떻게 목적지를 찾아갈까요? 제어부가 목적지 분류를 수행합니다. 경사로가 상자의 이동을 담당합니다. 나머지는 중력이 합니다. 이 구조가 처리 속도의 향상을 가능하게 합니다. 센서부가 예외 상황의 검출을 실시합니다. 이것이 물류 분류 시스템입니다.",
+  "beats": [
+    {
+      "id": "B01",
+      "purpose": "hook",
+      "text": "택배 상자는 어떻게 목적지를 찾아갈까요?",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B02",
+      "purpose": "reveal",
+      "text": "제어부가 목적지 분류를 수행합니다.",
+      "claim_ids": [
+        "C01"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B03",
+      "purpose": "process",
+      "text": "경사로가 상자의 이동을 담당합니다.",
+      "claim_ids": [
+        "C02"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B04",
+      "purpose": "process",
+      "text": "나머지는 중력이 합니다.",
+      "claim_ids": [
+        "C03"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B05",
+      "purpose": "process",
+      "text": "이 구조가 처리 속도의 향상을 가능하게 합니다.",
+      "claim_ids": [
+        "C04"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B06",
+      "purpose": "surprise",
+      "text": "센서부가 예외 상황의 검출을 실시합니다.",
+      "claim_ids": [
+        "C05"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B07",
+      "purpose": "closing",
+      "text": "이것이 물류 분류 시스템입니다.",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    }
+  ],
+  "target_duration_sec": 58.0,
+  "resolved_question": "테스트용 질문입니다.",
+  "referenced_claim_ids": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05"
+  ],
+  "estimated_word_count": 32
+}

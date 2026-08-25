@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "title": "ATM은 지폐를 어떻게 한 장씩 세는가",
+  "hook": "현금 입금기에 지폐 뭉치를 넣으면, 안에서는 무슨 일이 벌어질까요?",
+  "narration": "현금 입금기에 지폐 뭉치를 넣으면, 안에서는 무슨 일이 벌어질까요? 입금구 안쪽에는 고무 롤러가 줄지어 있고, 그 아래로 좁은 통로가 이어집니다. 지폐 뭉치가 들어오면 가장 위쪽 고무 롤러가 회전해서 맨 앞 지폐 한 장만 끌어당깁니다. 그런데 지폐 두 장이 붙어 들어오면 금액이 어긋나기 때문에, 반대로 도는 롤러가 아래쪽 지폐를 붙잡아 되돌려 보냅니다. 한 장으로 분리된 지폐는 초당 10장 안팎의 속도로 센서 구간을 지나며, 이때 두께와 무늬가 함께 확인됩니다. 그래서 훼손된 지폐가 섞여 있으면 계수는 멈추지 않고, 그 한 장만 별도 통로로 빠져 되돌아옵니다. 사람이 세는 대신 롤러와 센서에게 계수를 맡긴 작은 공장. 그것이 현금 입금기입니다.",
+  "beats": [
+    {
+      "id": "B01",
+      "purpose": "hook",
+      "text": "현금 입금기에 지폐 뭉치를 넣으면, 안에서는 무슨 일이 벌어질까요?",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B02",
+      "purpose": "reveal",
+      "text": "입금구 안쪽에는 고무 롤러가 줄지어 있고, 그 아래로 좁은 통로가 이어집니다.",
+      "claim_ids": [
+        "C01"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B03",
+      "purpose": "process",
+      "text": "지폐 뭉치가 들어오면 가장 위쪽 고무 롤러가 회전해서 맨 앞 지폐 한 장만 끌어당깁니다.",
+      "claim_ids": [
+        "C02"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B04",
+      "purpose": "process",
+      "text": "그런데 지폐 두 장이 붙어 들어오면 금액이 어긋나기 때문에, 반대로 도는 롤러가 아래쪽 지폐를 붙잡아 되돌려 보냅니다.",
+      "claim_ids": [
+        "C03"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B05",
+      "purpose": "process",
+      "text": "한 장으로 분리된 지폐는 초당 10장 안팎의 속도로 센서 구간을 지나며, 이때 두께와 무늬가 함께 확인됩니다.",
+      "claim_ids": [
+        "C04"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B06",
+      "purpose": "surprise",
+      "text": "그래서 훼손된 지폐가 섞여 있으면 계수는 멈추지 않고, 그 한 장만 별도 통로로 빠져 되돌아옵니다.",
+      "claim_ids": [
+        "C05"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B07",
+      "purpose": "closing",
+      "text": "사람이 세는 대신 롤러와 센서에게 계수를 맡긴 작은 공장. 그것이 현금 입금기입니다.",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    }
+  ],
+  "target_duration_sec": 58.0,
+  "resolved_question": "현금 입금이 가능한 ATM은 들어온 지폐를 어떻게 한 장씩 분리할까?",
+  "referenced_claim_ids": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05"
+  ],
+  "estimated_word_count": 94
+}

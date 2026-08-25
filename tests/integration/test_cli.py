@@ -86,11 +86,14 @@ def test_dry_run_calls_nothing(cli_config: Path, tmp_path: Path) -> None:
 
 
 def test_create_until_direct_then_inspect_and_status(cli_config: Path, tmp_path: Path) -> None:
+    # The mock has one hand-written scenario. Use its topic: any other one is
+    # placeholder material, and placeholder material is supposed to fail the
+    # content gates -- see test_a_topic_the_mock_has_no_scenario_for_is_rejected.
     created = invoke(
         cli_config,
         "create",
         "--topic",
-        "에스컬레이터 계단은 끝에서 어디로 갈까?",
+        "ATM은 돈을 어떻게 세는 걸까?",
         "--type",
         "inside_object",
         "--until",
@@ -112,6 +115,32 @@ def test_create_until_direct_then_inspect_and_status(cli_config: Path, tmp_path:
     assert status.exit_code == 0
     assert "research" in status.stdout
     assert "completed" in status.stdout
+
+
+def test_a_topic_the_mock_has_no_scenario_for_is_rejected(cli_config: Path) -> None:
+    """Placeholder content must fail the content gates, loudly.
+
+    ``scenarios.py`` says a mock that returns vague text means the quality
+    checks are only ever tested against material that would fail in production.
+    It had one hand-written scenario and a generic fallback that told the same
+    parcel-sorting story about every other topic -- kimchi fermentation
+    included -- in language made of pronouns. That passed every check.
+
+    Now it does not. Failing here is the correct outcome: it says the mock has
+    no data for this topic, which is true, instead of fabricating a plausible
+    answer that is about something else.
+    """
+    result = invoke(
+        cli_config,
+        "create",
+        "--topic",
+        "김치는 어떻게 발효될까?",
+        "--type",
+        "inside_object",
+        "--until",
+        "write",
+    )
+    assert result.exit_code == 1, result.stdout
 
 
 def test_status_without_an_argument_lists_projects(cli_config: Path) -> None:

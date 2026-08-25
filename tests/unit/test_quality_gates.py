@@ -181,7 +181,16 @@ def test_generic_nouns_are_capped(config) -> None:
     assert check_generic_nouns(script_with(concrete), config.content_contract) == []
 
 
-def test_a_beat_that_cannot_be_shown_is_rejected(config, settings) -> None:
+def test_a_script_with_nothing_to_show_is_rejected(config, settings) -> None:
+    """A video that is entirely talk fails -- but one unshowable beat does not.
+
+    This gate used to error on *any* beat marked unshowable. Applied to the
+    benchmark script in tests/fixtures/benchmark/ it deletes six of nine core
+    sentences: the scale, the reason the obvious answer fails, the numbers, the
+    date, the closing reframe. What survived was a middle section with no
+    beginning and no stakes, which is what the pipeline was producing. The rule
+    is now a share, not a per-beat veto.
+    """
     script = make_script(
         beats=[
             ScriptBeat(id="B01", purpose=BeatPurpose.HOOK, text="ATM은 어떻게 셀까요?"),
@@ -199,7 +208,68 @@ def test_a_beat_that_cannot_be_shown_is_rejected(config, settings) -> None:
     issues = check_script_contract(
         script, make_research(), config.content_contract, settings.script
     )
-    assert {"beat_not_visualizable", "beat_no_visual_payoff"} <= codes(issues)
+    assert "script_mostly_unshowable" in codes(issues)
+
+
+def test_one_unshowable_beat_among_several_is_allowed(config, settings) -> None:
+    """Context and consequence rarely have a single shot, and belong anyway."""
+    beats = [
+        ScriptBeat(id="B01", purpose=BeatPurpose.HOOK, text="ATM은 어떻게 셀까요?"),
+        ScriptBeat(
+            id="B02",
+            purpose=BeatPurpose.PROCESS,
+            text="1976년부터 쓰인 방식입니다.",
+            claim_ids=["C01"],
+            visualizable=False,
+        ),
+        ScriptBeat(
+            id="B03",
+            purpose=BeatPurpose.PROCESS,
+            text="고무 롤러가 지폐를 한 장씩 끌어당깁니다.",
+            claim_ids=["C02"],
+            visualizable=True,
+            visual_payoff="롤러가 맨 앞 지폐를 분리한다",
+        ),
+        ScriptBeat(
+            id="B04",
+            purpose=BeatPurpose.PROCESS,
+            text="센서가 무늬와 크기를 읽습니다.",
+            claim_ids=["C03"],
+            visualizable=True,
+            visual_payoff="지폐가 센서 창을 지난다",
+        ),
+    ]
+    script = make_script(
+        beats=beats,
+        narration=" ".join(beat.text for beat in beats),
+        hook=beats[0].text,
+    )
+    issues = check_script_contract(
+        script, make_research(), config.content_contract, settings.script
+    )
+    assert "script_mostly_unshowable" not in codes(issues)
+
+
+def test_a_beat_claiming_a_shot_must_say_what_it_is(config, settings) -> None:
+    """Marked showable with an empty visual_payoff is the field being skipped."""
+    script = make_script(
+        beats=[
+            ScriptBeat(id="B01", purpose=BeatPurpose.HOOK, text="ATM은 어떻게 셀까요?"),
+            ScriptBeat(
+                id="B02",
+                purpose=BeatPurpose.PROCESS,
+                text="고무 롤러가 지폐를 끌어당깁니다.",
+                claim_ids=["C01"],
+                visualizable=True,
+            ),
+        ],
+        narration="ATM은 어떻게 셀까요? 고무 롤러가 지폐를 끌어당깁니다.",
+        hook="ATM은 어떻게 셀까요?",
+    )
+    issues = check_script_contract(
+        script, make_research(), config.content_contract, settings.script
+    )
+    assert "beat_no_visual_payoff" in codes(issues)
 
 
 def test_a_scene_with_no_visible_change_is_rejected(config) -> None:

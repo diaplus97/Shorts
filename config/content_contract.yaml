@@ -26,6 +26,40 @@ script:
     - 방식
   # Every factual beat must be showable and say what is on screen while it plays.
   concrete_mechanism_required: true
+  # A sentence carrying context, scale or consequence usually has no single
+  # shot, and those are the ones that make an explanation an explanation.
+  # Requiring every beat to be showable deleted six of the nine core
+  # sentences from the benchmark script. What is worth failing is a video
+  # that is mostly talk with nothing to cut to.
+  max_unshowable_ratio: 0.5
+
+  # -- structure -------------------------------------------------------------
+  # The arc is a sequence, not a set. hook -> reveal -> process -> surprise ->
+  # closing, moving forward only. Checked in quality/script_arc.py.
+  arc_order_required: true
+  # NOTE: "follow one machine rather than touring several" is a real requirement
+  # and it is NOT checked here. Subject extraction does not work in a pro-drop
+  # language, and lexical overlap does not separate good scripts from bad ones
+  # by a usable margin. See quality/script_arc.py. It lives in the writer prompt.
+
+  # -- language --------------------------------------------------------------
+  # Thresholds measured from tests/fixtures/benchmark/water_reclamation.txt.
+  # See that directory's README for the benchmark-vs-output comparison.
+  min_hangul_ratio: 0.8
+  # "나머지는 중력이 합니다" -- an English idiom calqued into Korean, and an empty
+  # light verb where the physical action belongs.
+  ban_translationese: true
+  # Deictic reference ("것들", "그 상태") is a noun the writer declined to name,
+  # so the sentence only means something while its shot is on screen. This is the
+  # check for a script that leaves the explaining to the video.
+  # Benchmark 0.16 per 100 chars; the output that prompted this scored 1.92.
+  max_deictic_per_100_chars: 0.6
+  # Something has to join one sentence to the next besides the cut.
+  # Benchmark 0.97 per 100 chars; that output scored 0.00.
+  min_causal_per_100_chars: 0.5
+  # A quantity the sources establish is what separates this machine from any
+  # machine. Never invent one: no number in the claims is a research problem.
+  min_numerals: 1
 
 scene:
   visible_change_required: true

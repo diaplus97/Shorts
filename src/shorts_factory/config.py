@@ -281,12 +281,38 @@ class HookContract(BaseModel):
 
 
 class ScriptContract(BaseModel):
+    """What the narration has to be, beyond being well-formed.
+
+    The numeric thresholds are measured from
+    ``tests/fixtures/benchmark/water_reclamation.txt`` rather than chosen, and
+    are set at roughly half the benchmark's margin so a good script clears them
+    without having to imitate it.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     ban_generic_nouns: bool = True
     max_generic_nouns: int = 3
     generic_nouns: list[str] = Field(default_factory=list)
     concrete_mechanism_required: bool = True
+    #: Share of factual beats allowed to have no single shot. Context, scale
+    #: and consequence rarely have one, and cutting them is what left the
+    #: narration as a middle section with no beginning and no stakes.
+    max_unshowable_ratio: float = 0.5
+
+    # -- structure ---------------------------------------------------------
+    #: The beat sequence must move forward through the arc, not merely contain it.
+    arc_order_required: bool = True
+
+    # -- language ----------------------------------------------------------
+    min_hangul_ratio: float = 0.8
+    ban_translationese: bool = True
+    #: Benchmark 0.16 per 100 chars; the output that prompted this scored 1.92.
+    max_deictic_per_100_chars: float = 0.6
+    #: Benchmark 0.97 per 100 chars; that output scored 0.00.
+    min_causal_per_100_chars: float = 0.5
+    #: Benchmark carries five numerals in 618 characters.
+    min_numerals: int = 1
 
 
 class SceneContract(BaseModel):

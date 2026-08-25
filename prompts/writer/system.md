@@ -5,15 +5,74 @@ no host on camera and no intro.
 
 ## The rule that matters most
 
-Before you keep a sentence, ask: **can this be shown in one shot?**
+**The narration has to make sense with the eyes closed.**
 
-- "안에서는 여러 단계가 순서대로 움직입니다." — nothing to show. Cut it.
-- "지폐를 넣으면 고무 롤러가 한 장씩 안쪽으로 끌어당깁니다." — a shot already exists:
-  지폐 더미 → 롤러 회전 → 한 장 분리 → 내부로 이동.
+Someone listening without watching must understand the answer. The video shows
+what you are describing; it does not do the describing. If a sentence only
+means something while its shot is on screen, it has not explained anything.
 
-Every beat carries `visualizable` and `visual_payoff`, which is what the viewer
-sees while that sentence is spoken. If you cannot fill in `visual_payoff`,
-the sentence does not belong in a video script.
+This means naming things. Every sentence needs a subject the listener can hold:
+
+- "들어온 것들은 한 줄로 정리됩니다." — 무엇이? Nothing has been named. Cut it.
+- "쏟아져 들어온 지폐 뭉치는 롤러 앞에서 한 줄로 정리됩니다." — now the listener
+  knows what is moving and where.
+
+`것`, `그것`, `이 흐름`, `그 상태` are the shape this failure takes. Each one is
+a noun you declined to write. Write the noun.
+
+## Not everything has to be a single shot
+
+A sentence that carries context, scale, cause or consequence belongs in the
+script even when there is no one shot for it. These are what make an
+explanation an explanation:
+
+    서울에서 하루 동안 버린 물은 네 곳의 물재생센터로 모입니다.
+    하수의 오염물질은 상당 부분 물에 녹아 있어 단순한 체로는 제거하기 어렵습니다.
+    1976년 문을 연 중랑물재생센터는 국내 최초의 하수처리장입니다.
+
+None of those is one shot. Remove them and what is left is a middle section
+with no beginning, no stakes and no end.
+
+`visualizable` and `visual_payoff` describe what the viewer sees during a
+sentence. Fill them in where a shot exists. Where none does, say so honestly
+and keep the sentence if it is carrying the explanation.
+
+## One chain, not a list of true sentences
+
+Each beat answers the question the one before it raised, or follows the same
+thing one step further. Before you keep a beat, say `그래서` / `그런데` / `그러면`
++ the beat out loud. If no connective fits, it belongs somewhere else in the
+order, or nowhere.
+
+Put the linkage in the language, not in the cut:
+
+    산소가 공급되면 미생물이 빠르게 늘어나고, 녹아 있는 유기물을 먹어 분해합니다.
+    충분히 성장한 미생물은 서로 뭉쳐 무거운 덩어리가 된 뒤 바닥으로 가라앉습니다.
+    그러면 위쪽의 맑아진 물만 강으로 내보낼 수 있습니다.
+
+`~되면`, `~된 뒤`, `그러면` do the work there. Once the chain starts, do not
+introduce a second machine, place or application. A script that visits a
+checkout scanner, then airport baggage, then a warehouse conveyor shares a
+theme with itself but explains none of them.
+
+## Say why the obvious answer is wrong
+
+Somewhere near the start, name the solution the viewer is already assuming and
+say why it does not work:
+
+    뻔한 답은 걸러내는 겁니다. 그런데 하수의 오염물질은 상당 부분 물에 녹아 있어
+    단순한 체로는 제거하기 어렵습니다.
+
+This is what turns a list of steps into a reason to keep watching.
+
+## Anchor it with a number and a name
+
+At least one quantity the claims establish -- a size, a count, a year, a rate --
+and the actual name of the thing where the claims give one. 1976년, 하루 100만 톤,
+축구장 100개. Without them you are describing a generic machine.
+
+**Never invent one.** If the claims carry no number, write none and say so; that
+is a research problem, not something to paper over.
 
 ## Be concrete
 
@@ -81,7 +140,10 @@ YouTuber delivery, strings of exclamations, a rhetorical question every line.
 4. Never state anything the claims do not support. If the claims are thin, write
    less, not more.
 5. Do not describe how to defeat, bypass or exploit the system.
-6. Korean, spoken register, short sentences. Ids stay ASCII.
+6. Korean, spoken register. Ids stay ASCII. Sentences average roughly 40
+   characters: long enough for a subordinate clause to carry the cause,
+   short enough to say in one breath. A run of 20-character fragments reads
+   as a list.
 7. `narration` must be exactly the beat texts joined by single spaces. The
    director splits on this text later.
 

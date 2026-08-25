@@ -97,23 +97,33 @@ def check_concrete_mechanism(
     issues: list[QAIssue] = []
     visualizable_claims = {claim.id for claim in research.claims if claim.visualizable}
 
-    for beat in script.beats:
-        if beat.purpose in NON_FACTUAL_PURPOSES:
-            continue
-        if not beat.visualizable:
-            issues.append(
-                error(
-                    "beat_not_visualizable",
-                    f"beat {beat.id} ({beat.purpose}) is marked unshowable; a sentence "
-                    "that cannot be put on screen does not belong in a video script",
-                )
+    factual = [beat for beat in script.beats if beat.purpose not in NON_FACTUAL_PURPOSES]
+    unshowable = [beat for beat in factual if not beat.visualizable]
+
+    # A sentence carrying context, scale or consequence often has no single shot
+    # for it, and those are the sentences that make an explanation an
+    # explanation. The benchmark narration is roughly two-thirds unshowable by
+    # this measure. What is worth failing is a script that is *mostly* talk with
+    # nothing to cut to, not the presence of any such sentence.
+    limit = contract.script.max_unshowable_ratio
+    if factual and len(unshowable) / len(factual) > limit:
+        listed = ", ".join(beat.id for beat in unshowable)
+        issues.append(
+            error(
+                "script_mostly_unshowable",
+                f"{len(unshowable)} of {len(factual)} factual beats have no shot "
+                f"({listed}), over the limit of {limit:.0%}. This is a video; most of "
+                "it has to be something the viewer can watch happen.",
             )
-        if not (beat.visual_payoff or "").strip():
+        )
+
+    for beat in factual:
+        if beat.visualizable and not (beat.visual_payoff or "").strip():
             issues.append(
                 error(
                     "beat_no_visual_payoff",
-                    f"beat {beat.id} ({beat.purpose}) does not say what the viewer sees "
-                    "while it is spoken",
+                    f"beat {beat.id} ({beat.purpose}) is marked showable but does not "
+                    "say what the viewer sees while it is spoken",
                 )
             )
         if beat.claim_ids and not (set(beat.claim_ids) & visualizable_claims):
