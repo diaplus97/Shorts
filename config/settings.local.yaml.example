@@ -1,0 +1,27 @@
+# Copy to config/settings.local.yaml. Gitignored, and merged over
+# settings.yaml at load time, so keep only the keys you actually change.
+#
+#   cp config/settings.local.yaml.example config/settings.local.yaml
+#
+# The committed settings.yaml stays on mock providers so a fresh checkout runs
+# without spending anything. Real providers belong here, where `git pull` will
+# not fight them.
+#
+# Nested keys merge; lists replace. `shorts doctor` prints which override files
+# are in effect, and `shorts config` prints the merged result.
+
+providers:
+  video: veo
+
+video:
+  model: veo-3.1-fast-generate-preview
+  # Veo returns fixed clip lengths. A request rounds UP to the shortest one
+  # that covers it, so this also decides what you are billed.
+  allowed_durations: [4, 6, 8]
+  # A real Veo job takes minutes; 2s polling just burns requests.
+  poll_interval_sec: 15
+
+# Uncomment when you have OPENAI_API_KEY set and want real script writing.
+# providers:
+#   llm: openai
+#   tts: openai

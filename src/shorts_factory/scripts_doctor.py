@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .config import AppConfig, load_config
+from .config import AppConfig, active_local_overrides, load_config
 from .errors import ConfigError
 from .media import ffmpeg
 from .prompts import PROMPT_VERSIONS, load_prompt
@@ -54,6 +54,11 @@ def check_config(config_dir: Path | None) -> tuple[bool, AppConfig | None]:
     except ConfigError as exc:
         return _bad(f"configuration: {exc}"), None
     _ok(f"configuration loaded from {config.config_dir}")
+    # Running against settings you cannot see in `git diff` is worth saying out
+    # loud -- otherwise "it works for me" and "it fails for you" have no visible
+    # cause. This is a warning rather than a failure: overrides are the point.
+    for override in active_local_overrides(config.config_dir):
+        _warn(f"local override in effect: {override.name} (gitignored)")
     return True, config
 
 

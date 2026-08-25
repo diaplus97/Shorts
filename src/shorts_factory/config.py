@@ -462,9 +462,7 @@ class AppConfig(BaseModel):
             raise ConfigError(f"unknown content type '{name}'; known: {known}") from exc
 
 
-def _load_yaml(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise ConfigError(f"missing configuration file: {path}")
+def _read_yaml(path: Path) -> dict[str, Any]:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
@@ -472,6 +470,54 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ConfigError(f"{path} must contain a mapping at the top level")
     return data
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """``override`` wins, recursing into mappings so a partial file works.
+
+    Lists are replaced wholesale rather than concatenated: ``allowed_durations:
+    [4, 6, 8]`` has to mean exactly that, not "append to whatever was there".
+    """
+    merged = dict(base)
+    for key, value in override.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def local_override_path(path: Path) -> Path:
+    """``config/settings.yaml`` -> ``config/settings.local.yaml``."""
+    return path.with_suffix("").with_suffix(".local.yaml")
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    """One config file, with any sibling ``*.local.yaml`` merged over it.
+
+    The committed file stays the safe default -- mock providers, no spending --
+    so a checkout runs without touching a paid API. Machine-specific choices
+    (a real provider, a model id, a poll interval) go in the .local.yaml, which
+    is gitignored. Without this every pull collides with local edits, and the
+    usual resolution is to discard them and silently fall back to mock.
+    """
+    if not path.exists():
+        raise ConfigError(f"missing configuration file: {path}")
+    data = _read_yaml(path)
+    override = local_override_path(path)
+    if override.exists():
+        data = _deep_merge(data, _read_yaml(override))
+    return data
+
+
+def active_local_overrides(directory: Path) -> list[Path]:
+    """Local override files in effect, for diagnostics.
+
+    Running against a config you cannot see in git is worth stating out loud,
+    so `shorts doctor` reports these.
+    """
+    return sorted(directory.glob("*.local.yaml"))
 
 
 def load_config(config_dir: str | Path | None = None, *, load_env: bool = True) -> AppConfig:

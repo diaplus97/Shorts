@@ -159,16 +159,35 @@ provider's current official pricing before running anything paid.
 
 ## Connecting real providers
 
-Providers are selected in `config/settings.yaml` and credentialed in `.env`:
+Providers are selected in config and credentialed in `.env`. The committed
+`config/settings.yaml` stays on mocks so a fresh checkout cannot spend money by
+accident, so put your own choices in a **local override** instead of editing it:
+
+```bash
+cp config/settings.local.yaml.example config/settings.local.yaml
+```
+
+`config/*.local.yaml` is gitignored and merged over the matching `*.yaml` at
+load time. Nested keys merge, so name only what you change; lists replace
+wholesale. Editing `settings.yaml` directly works too, but every `git pull`
+then collides with it, and the usual way out of that collision is to discard
+your edits and silently fall back to mock.
 
 ```yaml
+# config/settings.local.yaml
 providers:
-  llm: openai      # mock | openai
-  search: mock     # mock
-  image: mock      # mock
-  video: mock      # mock
-  tts: openai      # mock | openai
+  llm: openai
+  video: veo
+  tts: openai
+
+video:
+  model: veo-3.1-fast-generate-preview
+  allowed_durations: [4, 6, 8]
+  poll_interval_sec: 15
 ```
+
+`shorts doctor` lists any override in effect, because running against settings
+that do not appear in `git diff` is worth stating out loud.
 
 Implemented today: `openai` for LLM and TTS, `veo` for video, mocks for
 everything. Search and image have interfaces and mocks but no real

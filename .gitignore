@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# machine-specific config, merged over config/*.yaml at load time
+config/*.local.yaml
+!config/*.local.yaml.example
+
 # generated projects & media
 projects/*
 !projects/.gitkeep
