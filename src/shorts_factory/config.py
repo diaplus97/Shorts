@@ -65,6 +65,14 @@ class SearchSettings(BaseModel):
     max_queries: int = 6
     max_results_per_query: int = 6
 
+    # -- Gemini grounded search -------------------------------------------
+    model: str = "gemini-2.5-flash"
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    timeout_sec: float = 60.0
+    #: Google returns redirect URIs on its own domain that expire. Following
+    #: them costs one request per hit and makes a stored citation durable.
+    resolve_redirects: bool = True
+
 
 class ResearchSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -121,6 +129,14 @@ class ImageSettings(BaseModel):
     model: str = "mock-image-1"
     width: int = 1080
     height: int = 1920
+
+    # -- Imagen ------------------------------------------------------------
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    aspect_ratio: str = "9:16"
+    person_generation: str | None = None
+    timeout_sec: float = 120.0
+    #: Escape hatch for a request field this code does not know about.
+    extra_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class TTSSettings(BaseModel):

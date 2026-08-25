@@ -39,9 +39,36 @@ pricing:
   search:
     mock:
       usd_per_query: 0.0
+
+    # Google Search grounding, billed per grounded prompt. Checked 2026-08-25.
+    #
+    # SOURCING: Google's own pricing pages are unreachable from the build
+    # environment, so these come from search-result summaries cross-checked
+    # across sources, NOT from primary documentation. Verify before relying on
+    # a budget built from them.
+    #
+    #   Gemini 2.5 family   $35 / 1,000 prompts   1,500 requests/day free
+    #   Gemini 3.x family   $14 / 1,000 prompts   5,000 prompts/month free
+    #
+    # The 3.x rate is 2.5x cheaper with a larger free allowance. The default
+    # model here is a 2.5 because it is the one most keys can reach; run
+    # scripts/list_gemini_models.py and move up if a 3.x is available to you.
+    # At max_queries: 6 a run costs about $0.21 on 2.5, $0.08 on 3.x.
+    gemini:
+      usd_per_query: 0.035
+
   image:
     mock:
       usd_per_image: 0.0
+
+    # Imagen 4, billed flat per image. Same sourcing caveat as search above.
+    #
+    #   Fast      $0.02      Standard  $0.04      Ultra  $0.06
+    #
+    # A rate keyed by model id wins over the "gemini" fallback, as with video.
+    # Stills are a fallback path, so a run normally buys few or none.
+    gemini:
+      usd_per_image: 0.04
   video:
     mock:
       usd_per_second: 0.0

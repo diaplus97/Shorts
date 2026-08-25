@@ -12,9 +12,11 @@ from typing import Any
 from ..config import AppConfig
 from ..errors import ConfigError
 from .base import ImageProvider, LLMProvider, SearchProvider, TTSProvider, VideoProvider
+from .image.gemini import GeminiImageProvider
 from .image.mock import MockImageProvider
 from .llm.mock import MockLLMProvider
 from .llm.openai import OpenAILLMProvider
+from .search.gemini import GeminiSearchProvider
 from .search.mock import MockSearchProvider
 from .tts.mock import MockTTSProvider
 from .tts.openai import OpenAITTSProvider
@@ -78,9 +80,17 @@ def build_search(config: AppConfig) -> SearchProvider:
     name = config.settings.providers.search
     if name == "mock":
         return MockSearchProvider(results_per_query=config.settings.search.max_results_per_query)
+    if name == "gemini":
+        search = config.settings.search
+        return GeminiSearchProvider(
+            model=search.model,
+            base_url=search.base_url,
+            timeout_sec=search.timeout_sec,
+            resolve_redirects=search.resolve_redirects,
+        )
     raise ConfigError(
-        f"unknown search provider '{name}'; only 'mock' is implemented. "
-        "Phase 5 adds the first real search provider (docs/IMPLEMENTATION_SPEC.md section 66)."
+        f"unknown search provider '{name}'; known: mock, gemini. "
+        "Run scripts/list_gemini_models.py to see which models your key can use."
     )
 
 
@@ -88,9 +98,19 @@ def build_image(config: AppConfig) -> ImageProvider:
     name = config.settings.providers.image
     if name == "mock":
         return MockImageProvider(model=config.settings.image.model)
+    if name == "gemini":
+        image = config.settings.image
+        return GeminiImageProvider(
+            model=image.model,
+            base_url=image.base_url,
+            aspect_ratio=image.aspect_ratio,
+            person_generation=image.person_generation,
+            extra_parameters=image.extra_parameters,
+            timeout_sec=image.timeout_sec,
+        )
     raise ConfigError(
-        f"unknown image provider '{name}'; only 'mock' is implemented. "
-        "Check the vendor's current docs before wiring a real one."
+        f"unknown image provider '{name}'; known: mock, gemini. "
+        "Run scripts/list_gemini_models.py to see which models your key can use."
     )
 
 

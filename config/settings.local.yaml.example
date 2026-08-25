@@ -11,7 +11,18 @@
 # are in effect, and `shorts config` prints the merged result.
 
 providers:
+  search: gemini      # real sources instead of example.invalid
+  image: gemini       # Imagen, so a still matches the clips around it
   video: veo
+
+search:
+  # Run `python scripts/list_gemini_models.py --kind llm` and use an id from
+  # there. A 3.x model grounds at 2.5x lower cost with a larger free tier.
+  model: gemini-2.5-flash
+
+image:
+  # `python scripts/list_gemini_models.py --kind image`
+  model: imagen-4.0-generate-001
 
 video:
   model: veo-3.1-fast-generate-preview
@@ -21,7 +32,9 @@ video:
   # A real Veo job takes minutes; 2s polling just burns requests.
   poll_interval_sec: 15
 
-# Uncomment when you have OPENAI_API_KEY set and want real script writing.
+# Real script writing and a real voice. Both need OPENAI_API_KEY, and both are
+# required for final.mp4: the production gate treats a mock LLM or a mock voice
+# as contaminating the output whether or not it appears in the asset ledger.
 # providers:
 #   llm: openai
 #   tts: openai
