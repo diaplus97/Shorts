@@ -128,7 +128,60 @@ def check_providers(config: AppConfig | None) -> bool:
             _ok(f"{kind}: {provider} ({secret_name} is set)")
         else:
             healthy = _bad(f"{kind}: {provider} needs {secret_name}; add it to .env") and healthy
+            _suggest_similar(secret_name)
     return healthy
+
+
+def _env_file() -> Path | None:
+    """The .env python-dotenv would have loaded, for saying where to look."""
+    for directory in [Path.cwd(), *Path.cwd().parents]:
+        candidate = directory / ".env"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def env_key_names(path: Path | None = None) -> list[str]:
+    """The variable NAMES in the .env file. Never the values.
+
+    Printing which keys exist is the difference between "FAL_KEY is not set" --
+    which is true and useless -- and seeing that the file has FAL_API_KEY in it,
+    or that it has the Gemini keys and no fal one at all because only what was
+    needed at the time got copied across.
+    """
+    target = path or _env_file()
+    if target is None:
+        return []
+    names: list[str] = []
+    try:
+        for line in target.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip().removeprefix("export ").strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name = line.split("=", 1)[0].strip()
+            if name:
+                names.append(name)
+    except OSError:
+        return []
+    return names
+
+
+def _suggest_similar(wanted: str) -> None:
+    """Point at a key that looks like the missing one, when there is one."""
+    present = env_key_names()
+    if not present:
+        path = _env_file()
+        print(
+            f"     no .env found from {Path.cwd()} upwards"
+            if path is None
+            else f"     {path} has no readable entries"
+        )
+        return
+    stem = wanted.replace("_API_KEY", "").replace("_KEY", "")
+    close = [n for n in present if stem and stem in n and n != wanted]
+    print(f"     .env is {_env_file()} and has: {', '.join(sorted(present))}")
+    if close:
+        print(f"     did you mean one of these? {', '.join(close)}")
 
 
 def check_project_root(config: AppConfig | None) -> bool:

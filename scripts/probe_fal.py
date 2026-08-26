@@ -54,7 +54,16 @@ async def main() -> int:
     load_dotenv(override=False)
     key = os.environ.get("FAL_KEY")
     if not key:
-        print("FAIL: FAL_KEY is not set. Put it in .env as FAL_KEY=...")
+        # "FAL_KEY is not set" on its own is true and useless. Which .env was
+        # read, and what is actually in it, is the part that answers the
+        # question -- usually that the key is there under another name, or that
+        # only the keys needed at the time ever got copied into this project.
+        from shorts_factory.scripts_doctor import _suggest_similar
+
+        print("FAIL: FAL_KEY is not set.")
+        _suggest_similar("FAL_KEY")
+        print("\n  To copy it across from another .env without printing it:")
+        print("    grep -h '^FAL' /path/to/other/.env >> ~/Shorts/.env")
         return 1
 
     model = args.model.strip("/")
