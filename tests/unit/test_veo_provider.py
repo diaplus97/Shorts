@@ -458,3 +458,33 @@ def test_veo_needs_explicit_clip_lengths() -> None:
     config.settings.video.allowed_durations = []
     with pytest.raises(ConfigError, match="allowed_durations"):
         build_video(config)
+
+
+def test_a_rejection_naming_only_the_value_is_still_matched() -> None:
+    """The first production run lost eight of ten scenes to this.
+
+    Veo names the offending field in some messages and only its value in
+    others: "1080p is not supported for a duration of 6 seconds" names no
+    field at all, so matching field names alone dropped nothing and every
+    short clip fell back to a still.
+    """
+    sent = {"aspectRatio": "9:16", "durationSeconds": 6, "resolution": "1080p"}
+    assert (
+        find_rejected_parameter(
+            "Veo HTTP 400: 1080p is not supported for a duration of 6 seconds.", sent
+        )
+        == "resolution"
+    )
+
+
+def test_a_bare_number_in_the_message_matches_nothing() -> None:
+    """Durations and counts appear in almost every message; they identify nothing."""
+    sent = {"aspectRatio": "9:16", "durationSeconds": 6, "sampleCount": 1}
+    assert find_rejected_parameter("Veo HTTP 400: something about 6 seconds", sent) is None
+    assert find_rejected_parameter("Veo HTTP 400: value 1 is wrong", sent) is None
+
+
+def test_a_load_bearing_parameter_is_never_matched_by_its_value() -> None:
+    """Dropping aspectRatio would return a clip we cannot use."""
+    sent = {"aspectRatio": "9:16", "resolution": "1080p"}
+    assert find_rejected_parameter("Veo HTTP 400: 9:16 is not supported", sent) is None

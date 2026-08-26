@@ -209,6 +209,7 @@ def is_retryable(exc: BaseException) -> bool:
 async def with_retry(operation: str, func: Any, settings: RetrySettings) -> Any:
     """Run ``func`` with exponential backoff on retryable provider errors."""
     attempt_number = 0
+    last_error: str | None = None
     async for attempt in AsyncRetrying(
         stop=stop_after_attempt(settings.provider_max_attempts),
         wait=wait_exponential(
@@ -223,16 +224,19 @@ async def with_retry(operation: str, func: Any, settings: RetrySettings) -> Any:
             if attempt_number > 1:
                 # Without the reason this line says a call is being repeated and
                 # not why, so four identical rate-limit failures look like four
-                # unexplained ones. The message names the quota that was hit.
-                outcome = attempt.retry_state.outcome
-                previous = outcome.exception() if outcome else None
+                # unexplained ones. tenacity clears retry_state.outcome before
+                # yielding, so the message has to be kept here.
                 log.warning(
                     "provider_retry",
                     operation=operation,
                     attempt=attempt_number,
-                    reason=str(previous)[:400] if previous else "unknown",
+                    reason=last_error or "unknown",
                 )
-            return await func()
+            try:
+                return await func()
+            except Exception as exc:
+                last_error = str(exc)[:400]
+                raise
     raise ProviderError(f"{operation} exhausted retries")  # pragma: no cover - defensive
 
 

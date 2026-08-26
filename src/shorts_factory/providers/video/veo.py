@@ -326,20 +326,30 @@ DROPPABLE_PARAMETERS = (
 def find_rejected_parameter(message: str, sent: dict[str, Any]) -> str | None:
     """The droppable parameter an INVALID_ARGUMENT complains about, if any.
 
-    Veo names the field in the message, though not in a fixed position:
+    Veo names the offending field in some messages and only its *value* in
+    others:
 
         "`generateAudio` isn't supported by this model."
         "allow_adult for personGeneration is currently not supported."
+        "1080p is not supported for a duration of 6 seconds."
 
-    So this matches on the field name appearing at all, and only for a field we
-    actually sent -- a message mentioning something we omitted is a different
-    problem and must not be swallowed.
+    The third names no field at all, so matching field names alone missed it
+    and eight scenes in a row fell back to stills. Values are matched too, and
+    only for a parameter we actually sent -- a message mentioning something we
+    omitted is a different problem and must not be swallowed.
     """
     if "400" not in message and "INVALID_ARGUMENT" not in message:
         return None
     lowered = message.lower()
     for field in DROPPABLE_PARAMETERS:
-        if field in sent and field.lower() in lowered:
+        if field not in sent:
+            continue
+        if field.lower() in lowered:
+            return field
+        # A value like "1080p" is distinctive enough to identify its field; a
+        # bare number is not, and would match any duration or count in the text.
+        value = str(sent[field]).strip().lower()
+        if len(value) > 2 and not value.isdigit() and value in lowered:
             return field
     return None
 
