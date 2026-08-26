@@ -227,3 +227,16 @@ def test_stopping_before_the_paid_stage_never_asks(cli_config: Path) -> None:
 
     assert result.exit_code == 0, result.stdout
     assert "Generate the video from this script?" not in result.stdout
+
+
+def test_the_gate_says_when_the_run_is_all_mock(cli_config: Path) -> None:
+    """A mock run reaches the gate costing nothing and finishes as a preview.
+
+    Read quickly that looks like a successful run, and a config override left
+    switched off is enough to cause it. The gate's job is to inform the
+    decision, so it names the mock providers.
+    """
+    result = invoke(cli_config, "create", *ATM, "--slug", "gated", answer="n\n")
+
+    assert "are mock providers" in result.stdout
+    assert "never final.mp4" in result.stdout

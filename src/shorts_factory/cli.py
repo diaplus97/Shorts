@@ -34,7 +34,13 @@ from .pipeline import (
     total_estimated_cost,
 )
 from .providers import build_providers
-from .quality import QAReport, check_scene_plan, check_script, fact_lock_issues
+from .quality import (
+    QAReport,
+    check_scene_plan,
+    check_script,
+    fact_lock_issues,
+    mock_provider_kinds,
+)
 from .utils import bind_project_log, configure_logging
 
 app = typer.Typer(
@@ -157,6 +163,16 @@ def _review_gate(until: Stage | None, auto_yes: bool):
             f"  spent so far ${spent:.4f} — the stages after this cost about ${remaining:.4f} more",
             bold=True,
         )
+        # An all-mock run reaches this prompt costing nothing and produces a
+        # watermarked preview, which reads as a successful run to anyone not
+        # watching the provider names go by. The gate exists to inform this
+        # decision, and no fact is more decision-relevant than "none of it is real".
+        if mocks := mock_provider_kinds(context.providers):
+            typer.secho(
+                f"  NOTE: {', '.join(mocks)} are mock providers. This run costs nothing "
+                "and can only produce a watermarked mock_preview.mp4, never final.mp4.",
+                fg=typer.colors.YELLOW,
+            )
         typer.echo("")
 
         if auto_yes:
