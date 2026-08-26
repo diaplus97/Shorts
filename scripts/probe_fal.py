@@ -49,6 +49,63 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+#: Config keys that switch a request field off, for the ones this pipeline
+#: knows how to stop sending.
+_FIELD_SETTING = {"duration": "duration_field", "aspect_ratio": "aspect_ratio_field"}
+
+
+def rejected_field(message: str, sent: dict) -> str | None:
+    """The field fal refused, when the message names one it can be sent without.
+
+    Matched on the value as well as the name: Veo taught this pipeline that a
+    400 often names what was wrong rather than which key held it -- "1080p is
+    not supported for a duration of 6 seconds" names neither `resolution` nor
+    `duration` -- and eight scenes were lost to reading only the key names.
+    """
+    lowered = message.lower()
+    for field in _FIELD_SETTING:
+        if field not in sent:
+            continue
+        if field in lowered:
+            return field
+        value = str(sent[field]).strip().lower()
+        if len(value) > 2 and not value.isdigit() and value in lowered:
+            return field
+    return None
+
+
+async def submit_dropping_rejected(client, model, headers, payload):
+    """POST, dropping any optional field fal refuses, until it takes one.
+
+    Free to do: a 400 is refused before generation starts, so every attempt
+    that fails costs nothing. Only the attempt that succeeds is billed, and
+    there is exactly one of those.
+    """
+    attempted = dict(payload)
+    dropped: list[str] = []
+    while True:
+        response = await client.post(f"{BASE_URL}/{model}", headers=headers, json=attempted)
+        if response.status_code < 400:
+            return response, attempted, dropped
+        field = rejected_field(response.text, attempted)
+        if field is None:
+            return response, attempted, dropped
+        attempted.pop(field)
+        dropped.append(field)
+        print(f"  refused '{field}' (free -- nothing generated); retrying without it")
+
+
+def config_lines(model: str, payload: dict, dropped: list[str]) -> str:
+    """The settings.local.yaml block matching the shape that worked."""
+    lines = ["video:", f"  model: {model}"]
+    for field, setting in _FIELD_SETTING.items():
+        if field in dropped:
+            lines.append(f"  {setting}: null")
+    if isinstance(payload.get("duration"), str):
+        lines.append("  duration_as_string: true")
+    return "\n".join("    " + line for line in lines)
+
+
 async def main() -> int:
     args = parse_args()
     load_dotenv(override=False)
@@ -81,14 +138,20 @@ async def main() -> int:
     print(f"  request {json.dumps(shown, ensure_ascii=False)}\n")
 
     async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(f"{BASE_URL}/{model}", headers=headers, json=payload)
+        response, payload, dropped = await submit_dropping_rejected(client, model, headers, payload)
         print(f"  submit  HTTP {response.status_code}")
         print(f"          {response.text[:600]}\n")
         if response.status_code >= 400:
-            print("  The message above names what fal did not accept. A wrong field")
-            print("  name is a config change (video.duration_field / aspect_ratio_field")
-            print("  / extra_parameters), not a code change.")
+            print("  Nothing was billed: a 400 is refused before generation starts.")
+            print("  The message above names what fal did not accept, and dropping")
+            print("  fields one at a time did not find a shape it would take.")
             return 1
+        if dropped:
+            print(f"  These fields were refused and left out: {', '.join(dropped)}")
+            print("  Put that in config/settings.local.yaml so a real run sends the")
+            print("  same shape:\n")
+            print(config_lines(model, payload, dropped))
+            print()
 
         request_id = response.json().get("request_id")
         if not request_id:
