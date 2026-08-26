@@ -16,7 +16,10 @@ Three things about Veo shape this adapter more than the endpoints do:
   Retrying one costs money and fails again, so it raises
   :class:`ContentBlockedError` and the scene falls back to a still.
 
-**This provider has not been run against the live API.** It is written from the
+**Partly verified against the live API.** Two clips of ten came back in the
+first paid run; the other eight were refused with "1080p is not supported for
+a duration of 6 seconds", which is why rejected parameters are matched on
+their value and not only their name. The rest is written from the
 documented request and response shape, and every value that could drift lives in
 `config/settings.yaml` -- including `extra_parameters`, an escape hatch for a
 field this code does not know about. Check Google's current Veo documentation

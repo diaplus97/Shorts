@@ -28,8 +28,11 @@ in the request body and no upload step is needed. Handing the model the opening
 frame is what stops twelve clips being twelve different machines, and it is what
 the image-to-video workflows this is modelled on all do.
 
-**Not yet run against the live API.** ``scripts/probe_fal.py`` makes exactly one
-call and prints the raw response, which is the cheap way to find a shape change.
+**Submission is verified; the rest is not.** A probe submitted successfully and
+came back with a request_id, which also revealed that the queue does not live
+under the model path -- see ``base_app_id``. That fix has not itself been run.
+``scripts/probe_fal.py`` makes exactly one call and prints the raw response,
+which is the cheap way to find the next shape change.
 """
 
 from __future__ import annotations

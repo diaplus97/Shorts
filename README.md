@@ -15,6 +15,101 @@ exactly three points — research, writing, directing — and everything it retu
 is validated against a Pydantic schema before the next stage sees it.
 
 
+## Where this stands
+
+Last commit `b033670`, 2026-08-26. Read this before changing anything: most of
+what is written here was paid for, and rediscovering it costs money or a wasted
+run.
+
+### What has actually run against a real API
+
+One complete paid run has happened, producing a real `final.mp4` at $2.97 with
+genuine sources. What that exercised, and what it did not:
+
+| | state | evidence |
+|---|---|---|
+| LLM (Gemini) | **works** | wrote scripts across several runs |
+| Search (Gemini grounding) | **works** | real sources: 효성TNS, ECB, Bank of Greece, a patent, arXiv |
+| TTS (Gemini) | **works, sounds wrong** | audio renders; the read is too slow and the voice was rejected |
+| Image (Gemini) | **works** | generated the stills 8 of 10 scenes fell back to |
+| Veo 3.1 | **works, mostly refused** | 2 clips of 10; the other 8 hit a parameter rejection |
+| fal.ai | **submit verified, rest not** | HTTP 200 + request_id; polling was broken and the fix is untested |
+| ffmpeg composition | **works** | produced the finished MP4 |
+
+Every provider docstring saying "not yet run against the live API" predates
+that run. Only the fal one is still true end to end.
+
+**The last thing that happened:** the fal probe submitted successfully and then
+405'd on every poll, because fal's queue lives under the base app id
+(`fal-ai/wan`) and not the model path (`fal-ai/wan/v2.6/image-to-video`). Fixed
+in `b033670` by following the `status_url` the submit reply returns. **That fix
+has not been run.** One clip was generated and billed during that probe and
+never collected.
+
+### The traps already paid for
+
+Each of these cost money or a failed run to find. They are in the code with
+comments; this is the index.
+
+| Trap | Where |
+|---|---|
+| fal's queue is under `fal-ai/wan`, not the versioned model path — otherwise 405 forever | `providers/video/fal.py` |
+| Gemini TTS returns headerless PCM; saving it as .wav gives a file with no stream | `providers/tts/gemini.py` |
+| No `imagen-*` model exists on these keys — the image models are `gemini-*-image` on `generateContent`, not `:predict` | `providers/image/gemini.py` |
+| A Veo 400 names the offending *value*, not the field: "1080p is not supported for a duration of 6 seconds". Reading key names only cost 8 of 10 scenes | `providers/video/veo.py` |
+| Gemini's schema subset rejects `$ref`/`$defs`; filtering keywords *inside* `properties` silently deleted ScriptResult's `title` field | `providers/llm/gemini.py` |
+| A spending-cap 429 is an account setting, not congestion — retrying it four times only delays the message | `providers/base.py` |
+| Common static ffmpeg builds have no `drawtext` (no libfreetype), so the mock watermark degrades to `drawbox` | `media/compose.py` |
+| tenacity clears `retry_state.outcome` before yielding, so a retry reason has to be recorded on the way past | `providers/base.py` |
+| `grep -c` prints 0 *and* exits 1, so `|| echo 0` yields the string "0\n0" | `scripts/import_key.sh` |
+| `python` is not a command on stock Ubuntu/WSL, and `python3` is not this project's interpreter | `run.sh` |
+
+### What is known to be wrong
+
+Ranked by how much it hurts the output, from the reviews of the one finished
+video:
+
+1. **The script explains too little.** Structural gates all pass — seven beats,
+   sourced claims, the arc in order — and a reader still cannot picture the
+   mechanism. Gates were the wrong tool: `quality/` is 1,584 lines and 30
+   checks, and every one of them passed the script that was judged worse than
+   asking an LLM the bare question. What moved the needle both times was the
+   writer prompt, which is 560 lines against 13,000 lines of machinery.
+2. **Cost.** Veo 3.1 Standard at $0.40/s prices a 65-second Short at about $26,
+   and it was the default. `providers.video: fal` with Wan 2.6 is $3.25 for the
+   same Short. This is configured in the example override but has never
+   completed a run.
+3. **Every cut redesigned the machine.** Addressed by the anchor frame — one
+   still per Short, every scene's opening frame generated from it, that frame
+   handed to the video model — but not yet seen in a finished video.
+4. **Everything came out photorealistic.** The diagram styles were correct all
+   along; the director labelled every scene `observed` despite the prompt
+   telling it not to, and nothing checked. `redirect_reality_types` now draws
+   `observed` as a cutaway. Not yet seen in a finished video.
+5. **TTS pace and voice.** `tts.speed` retimes the rendered audio and
+   `scripts/audition_voices.py` renders one line in several voices for a
+   fraction of a cent. Neither has been used in anger.
+
+### If you are picking this up
+
+Run it where you can see it fail. This repository was built from a remote
+container with no access to the author's filesystem, no reachable fal.ai
+documentation, and no ability to make a paid call — so five consecutive rounds
+were spent on integration bugs that one local run would have caught in a
+minute each. The single highest-value change to how this is worked on is to
+work on it locally.
+
+The next concrete step is one command:
+
+```bash
+./run.sh --probe
+```
+
+It submits one clip, follows the queue url, and prints the raw response. If it
+completes, `./run.sh "<topic>"` is a $3-5 full run. If it fails, the message
+names the field and the probe prints the config block that fixes it.
+
+
 ## Running it
 
 One command, from a cold terminal:

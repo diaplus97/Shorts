@@ -14,7 +14,8 @@ keywords Pydantic emits -- ``$defs``, ``$ref``, ``additionalProperties``,
 refuses the schema, the request falls back to plain JSON mode with the schema
 in the prompt, which is what the OpenAI adapter does for the same reason.
 
-**This provider has not been run against the live API.** Model ids move; run
+**Verified against the live API.** It has written scripts across several
+paid runs. Model ids still move; run
 ``scripts/list_gemini_models.py --kind llm`` to see what this key can reach.
 """
 

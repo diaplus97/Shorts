@@ -18,7 +18,9 @@ its destination so what is stored is the real address, at the cost of a HEAD
 request per hit; turned off, citations are honest about being redirects but do
 not survive being written down.
 
-**This provider has not been run against the live API.** The request and
+**Verified against the live API.** It returned real sourced claims in a paid
+run -- 효성TNS, the ECB, the Bank of Greece, a patent and an arXiv paper.
+The request and
 response shapes come from documentation, model ids move, and
 ``scripts/list_gemini_models.py`` will tell you what this key can actually see.
 """

@@ -23,7 +23,8 @@ the same vendor as the video provider is the point: a still from a different
 generator to the clips beside it will not match them, and no prompt wording
 fixes that.
 
-**Not yet run against the live API.** ``scripts/list_gemini_models.py --kind
+**Verified against the live API.** It generated the stills that eight of ten
+scenes fell back to in the first paid run. ``scripts/list_gemini_models.py --kind
 image`` reports what a key can reach, and the response is walked rather than
 indexed so a shape change degrades to a clear error.
 """

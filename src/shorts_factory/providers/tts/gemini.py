@@ -14,7 +14,9 @@ match what the model actually returns, or the voice plays at the wrong pitch
 while every duration check still passes. Gemini's TTS models document 24 kHz,
 16-bit, mono.
 
-**This provider has not been run against the live API.** Model ids move; run
+**Verified against the live API**, with one caveat that is not a bug here: the
+read was judged too slow and the voice wrong, which is what ``tts.speed`` and
+``scripts/audition_voices.py`` exist for. Model ids move; run
 ``scripts/list_gemini_models.py --kind tts`` to see what this key can reach.
 """
 
