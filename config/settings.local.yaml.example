@@ -100,3 +100,11 @@ video:
   # the video model as its opening frame. This is what stops every cut being a
   # differently designed machine. Adds roughly $0.04 per scene.
   anchor_frames: true
+
+# Where finished projects are written. The code is small; what grows is video,
+# stills and audio under this directory, several GB per Short. Pointing it at
+# another drive keeps that off the one the repository lives on.
+#
+# Windows paths work as written -- forward slashes are fine:
+#   project_root: D:/shorts-projects
+#project_root: projects

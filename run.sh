@@ -90,6 +90,26 @@ if ! $PY scripts/doctor.py; then
 fi
 
 # -- 5. the run -------------------------------------------------------------
+# Where finished projects land. Asked of the config rather than assumed to be
+# ./projects, because project_root is routinely pointed at another drive to
+# keep several GB of video off the one the code lives on.
+latest_project() {
+  $PY -c "
+import sys
+from pathlib import Path
+from shorts_factory.config import load_config
+try:
+    root = Path(load_config('config').settings.project_root)
+except Exception:
+    sys.exit(0)
+if not root.is_absolute():
+    root = Path.cwd() / root
+dirs = [d for d in root.glob('*') if d.is_dir()] if root.is_dir() else []
+if dirs:
+    print(max(dirs, key=lambda d: d.stat().st_mtime))
+" 2>/dev/null
+}
+
 if [ -n "$RESUME" ]; then
   step "resuming $RESUME"
   $PY -m shorts_factory resume "$RESUME"; STATUS=$?
@@ -103,18 +123,18 @@ fi
 
 echo
 if [ "$STATUS" = "0" ]; then
-  LATEST="$(ls -td projects/*/ 2>/dev/null | head -1)"
-  if [ -n "$LATEST" ] && [ -f "${LATEST}output/final.mp4" ]; then
-    ok "done: ${LATEST}output/final.mp4"
-  elif [ -n "$LATEST" ] && [ -f "${LATEST}output/mock_preview.mp4" ]; then
-    warn "this run used a mock provider somewhere, so it is ${LATEST}output/mock_preview.mp4"
+  LATEST="$(latest_project)"
+  if [ -n "$LATEST" ] && [ -f "$LATEST/output/final.mp4" ]; then
+    ok "done: $LATEST/output/final.mp4"
+  elif [ -n "$LATEST" ] && [ -f "$LATEST/output/mock_preview.mp4" ]; then
+    warn "this run used a mock provider somewhere, so it is $LATEST/output/mock_preview.mp4"
     warn "and not a real Short. config/settings.local.yaml is where providers are set."
   elif [ -n "$LATEST" ]; then
     ok "done: $LATEST"
   fi
 else
   echo "the run stopped. Nothing already paid for is lost -- to carry on:"
-  LATEST="$(ls -td projects/*/ 2>/dev/null | head -1)"
+  LATEST="$(latest_project)"
   [ -n "$LATEST" ] && echo "    ./run.sh --resume $(basename "$LATEST")"
 fi
 exit $STATUS

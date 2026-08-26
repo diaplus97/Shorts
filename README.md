@@ -449,6 +449,20 @@ copy C:\Users\SAMSUNG\Shorts\Shorts\.env .env
 .venv\Scripts\python -m shorts_factory create "ATM은 어떻게 지폐를 셀까?"
 ```
 
+### Keeping the video off the system drive
+
+The repository is small; what grows is `projects/`, at several GB per Short.
+Point it at another drive in `config/settings.local.yaml` -- forward slashes
+are fine on Windows:
+
+```yaml
+project_root: D:/shorts-projects
+```
+
+Cloning the repository itself onto an SD card is the worse half of that trade:
+installing the virtualenv writes thousands of small files, which is the access
+pattern SD cards are slowest at.
+
 ### What has to be installed first
 
 - **Python 3.12+** — `winget install Python.Python.3.12`
