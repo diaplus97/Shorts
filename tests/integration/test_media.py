@@ -6,12 +6,15 @@ from pathlib import Path
 
 import pytest
 
+from shorts_factory.config import HighlightStyle
 from shorts_factory.errors import MediaError
 from shorts_factory.media import (
+    HighlightBox,
     compose,
     normalize_image,
     normalize_video,
     probe,
+    retime,
     write_concat_list,
 )
 from shorts_factory.media.compose import build_audio_filter, build_video_filter
@@ -182,3 +185,43 @@ def test_audio_filter_ducks_only_when_bgm_is_present(settings) -> None:
 def test_probe_rejects_a_missing_file(tmp_path) -> None:
     with pytest.raises(MediaError, match="cannot probe"):
         probe(tmp_path / "nope.mp4")
+
+
+async def test_a_highlight_box_renders_and_changes_the_picture(tmp_path, settings) -> None:
+    """The filter string has to be one real ffmpeg accepts, and it has to draw.
+
+    A drawbox that ffmpeg silently ignores would pass a duration check and ship
+    a clip with nothing pointed at, which is the exact failure this feature
+    exists to fix -- so the two renders are compared frame to frame.
+    """
+    source = await make_clip(tmp_path / "src.mp4", 3.0, size="1080x1920")
+    plain = await normalize_video(
+        source, tmp_path / "plain.mp4", duration_sec=2.0, output=settings.output
+    )
+    boxed = await normalize_video(
+        source,
+        tmp_path / "boxed.mp4",
+        duration_sec=2.0,
+        output=settings.output,
+        highlight=HighlightBox(x=0.2, y=0.3, width=0.5, height=0.2),
+        highlight_style=HighlightStyle(),
+    )
+    assert probe(boxed).duration_sec == pytest.approx(2.0, abs=0.1)
+    assert plain.read_bytes() != boxed.read_bytes()
+
+
+async def test_retime_shortens_the_track_without_losing_it(tmp_path) -> None:
+    tone = await make_tone(tmp_path / "voice.wav", 4.0)
+    out = await retime(tone, tmp_path / "fast.wav", speed=1.25, sample_rate=24000)
+    info = probe(out)
+    assert info.duration_sec == pytest.approx(3.2, abs=0.1)
+    assert info.has_audio
+
+
+async def test_retime_can_write_over_its_own_source(tmp_path) -> None:
+    """The narration stage calls it this way, so the in-place path is the path."""
+    tone = await make_tone(tmp_path / "voice.wav", 4.0)
+    out = await retime(tone, tone, speed=2.0, sample_rate=24000)
+    assert out == tone
+    assert probe(tone).duration_sec == pytest.approx(2.0, abs=0.1)
+    assert not list(tmp_path.glob("*.retime.wav"))

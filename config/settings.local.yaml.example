@@ -54,6 +54,17 @@ tts:
   model: gemini-2.5-flash-preview-tts
   # `python scripts/list_gemini_models.py --kind tts` for what is available.
   voice: Kore
+  # Pace. The default voice reads slowly for this format; 1.1-1.25 is usually
+  # the fix. Set it here rather than asking for a faster read in the style
+  # instruction below -- that changes the pace by an unpredictable amount, and
+  # every cut in the video is timed off the rendered audio.
+  #
+  #   python scripts/audition_voices.py --speeds 1.0,1.15,1.3
+  #
+  # audition_voices also measures characters per second for each pairing. Put
+  # that number in script.chars_per_sec below, or the writer will keep sizing
+  # scripts against a rate the voice does not read at.
+  speed: 1.0
   # Gemini takes delivery direction in the prompt rather than as parameters.
   # Keep this in step with config/voice.yaml's tone profile.
   style_instruction: >

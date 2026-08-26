@@ -48,6 +48,47 @@ class WorldSpec(BaseModel):
         return ", ".join(part for part in parts if part)
 
 
+class HighlightSpec(BaseModel):
+    """A rectangle drawn over one shot to point at the part being described.
+
+    The reference Short does this constantly: the narration names a component
+    and a box appears around it, so the viewer knows which of the twenty things
+    on screen is the one being talked about. Without it a wide shot of a machine
+    is the viewer's problem to parse, which is the failure mode this pipeline
+    kept producing -- a correct picture that explains nothing because nothing in
+    it is pointed at.
+
+    Coordinates are fractions of the frame, not pixels, so the same spec
+    survives a resolution change. ``x``/``y`` are the top-left corner.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    width: float = Field(gt=0.0, le=1.0)
+    height: float = Field(gt=0.0, le=1.0)
+
+    #: When the box appears, measured from the start of the shot. A box that is
+    #: up before the narration reaches its subject points at nothing.
+    start_sec: float = Field(default=0.0, ge=0.0)
+    #: How long it stays. None means "until the shot ends".
+    duration_sec: float | None = Field(default=None, gt=0.0)
+
+    #: What this box is around, in plain words. Not rendered -- on-screen text
+    #: needs ``drawtext``, which common static ffmpeg builds ship without -- but
+    #: it is what makes a generated box reviewable without watching the video.
+    label: str | None = None
+
+    @model_validator(mode="after")
+    def _inside_the_frame(self) -> HighlightSpec:
+        if self.x + self.width > 1.0001:
+            raise ValueError(f"highlight runs off the right edge: x={self.x} width={self.width}")
+        if self.y + self.height > 1.0001:
+            raise ValueError(f"highlight runs off the bottom edge: y={self.y} height={self.height}")
+        return self
+
+
 class Scene(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -92,12 +133,28 @@ class Scene(BaseModel):
     continuity_ids: list[str] = Field(default_factory=list)
     claim_ids: list[str] = Field(default_factory=list)
 
+    #: An optional box drawn over this shot to point at what is being named.
+    highlight: HighlightSpec | None = None
+
     transition_in: str | None = None
     transition_out: str | None = None
     #: Name from `config/sfx.yaml` vocabulary, or None for a silent scene.
     sfx_cue: str | None = None
 
     negative_constraints: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _highlight_fits_the_shot(self) -> Scene:
+        """A box cannot start after the shot it is drawn on has ended."""
+        box = self.highlight
+        if box is None:
+            return self
+        if box.start_sec >= self.duration_sec:
+            raise ValueError(
+                f"scene {self.id}: highlight starts at {box.start_sec}s but the shot is "
+                f"only {self.duration_sec}s long"
+            )
+        return self
 
     @field_validator("duration_sec")
     @classmethod

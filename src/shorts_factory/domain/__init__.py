@@ -20,7 +20,7 @@ from .enums import (
 from .manifest import Manifest, ManifestScene
 from .project import CostSummary, Project, StageRecord, utcnow
 from .research import Claim, QuestionSpec, ResearchResult, SourceRef
-from .scene import ContinuitySpec, Scene, ScenePlan, WorldSpec
+from .scene import ContinuitySpec, HighlightSpec, Scene, ScenePlan, WorldSpec
 from .script import ScriptBeat, ScriptResult
 from .speech import (
     MAX_PAUSE_MS,
@@ -49,6 +49,7 @@ __all__ = [
     "ContinuitySpec",
     "CostSummary",
     "DeliveryMode",
+    "HighlightSpec",
     "Manifest",
     "ManifestScene",
     "PipelineState",

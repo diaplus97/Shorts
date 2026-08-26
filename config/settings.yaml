@@ -112,6 +112,13 @@ tts:
   voice: default
   format: wav
   sample_rate: 24000
+  # Delivery pace, applied to the rendered audio rather than requested from the
+  # provider -- Gemini TTS has no speed parameter, and a faster read asked for
+  # in the prompt arrives by an amount nobody can predict. atempo keeps the
+  # pitch, so this is the same voice reading faster. Applied before the
+  # durations are measured, so cuts and subtitles follow it.
+  # `python scripts/audition_voices.py --speeds 1.0,1.15,1.3` to choose by ear.
+  speed: 1.0
 
 script:
   # The reference Short in tests/fixtures/benchmark/ is 476 characters, about
@@ -133,6 +140,20 @@ scenes:
   max_scenes: 14
   min_scene_duration_sec: 1.5
   max_scene_duration_sec: 9.0
+  # Highlight boxes are emphasis, and emphasis is relative: past this fraction
+  # of the plan they read as a border rather than as a pointer.
+  max_highlight_ratio: 0.5
+
+# The box the director can draw over a shot to point at the part the narration
+# is naming. drawbox, not drawtext: it needs no font, so it works on the
+# stripped static ffmpeg builds that cannot render text at all.
+highlight:
+  # Any colour ffmpeg parses. 0xFFD755 is subtitles.emphasis_colour in RGB, so
+  # the box and the stressed word are the same yellow.
+  colour: "0xFFD755@0.95"
+  # Outline width in output pixels.
+  thickness: 8
+  enabled: true
 
 subtitles:
   max_lines: 2

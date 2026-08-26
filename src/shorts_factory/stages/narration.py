@@ -24,7 +24,7 @@ from ..domain import (
     SpeechTimingEntry,
 )
 from ..errors import MediaError
-from ..media import concat_with_gaps, probe
+from ..media import concat_with_gaps, probe, retime
 from ..pipeline.checkpoint import (
     require_scenes,
     require_speech_plan,
@@ -43,9 +43,26 @@ STAGE_NAME = "narrate"
 
 
 def unit_fingerprint(context: RunContext, text: str) -> str:
+    """What makes one cached unit different from another.
+
+    ``speed`` belongs in here even though it is applied after synthesis: the
+    cached file on disk is already retimed, so without it a changed pace would
+    reuse every unit at the old one and only new lines would move.
+    """
     tts = context.providers.tts
     settings = context.settings.tts
-    return sha256_text("|".join([tts.name, tts.model, settings.voice, settings.format, text]))
+    return sha256_text(
+        "|".join(
+            [
+                tts.name,
+                tts.model,
+                settings.voice,
+                settings.format,
+                f"{settings.speed:g}",
+                text,
+            ]
+        )
+    )
 
 
 def _load_cache(context: RunContext) -> dict[str, str]:
@@ -66,6 +83,7 @@ async def synthesize_units(context: RunContext, speech: SpeechPlan) -> SpeechTim
     segments = segments_for(speech)
     cache = {} if context.force else _load_cache(context)
     fresh_cache: dict[str, str] = {}
+    speed = context.settings.tts.speed
 
     total_chars = sum(len(segment.text) for segment in segments)
     estimated = context.guard.estimate_tts_usd(tts.name, total_chars)
@@ -87,6 +105,16 @@ async def synthesize_units(context: RunContext, speech: SpeechPlan) -> SpeechTim
                 lambda s=segment, d=destination: tts.synthesize(s.text, d),
                 context.settings.retry,
             )
+            # Retime before measuring, never after. Every downstream duration --
+            # the scene cuts, the subtitle cues, the manifest -- is read off
+            # this file, so changing the pace here is the whole change.
+            if speed != 1.0:
+                await retime(
+                    destination,
+                    destination,
+                    speed=speed,
+                    sample_rate=context.settings.tts.sample_rate,
+                )
             synthesised += 1
 
         info = probe(destination)
@@ -135,6 +163,7 @@ async def synthesize_units(context: RunContext, speech: SpeechPlan) -> SpeechTim
             "provider": tts.name,
             "model": tts.model,
             "voice": context.settings.tts.voice,
+            "speed": speed,
             "characters": total_chars,
             "duration_sec": measured.duration_sec,
             "units": fresh_cache,
@@ -146,6 +175,7 @@ async def synthesize_units(context: RunContext, speech: SpeechPlan) -> SpeechTim
         units=len(segments),
         synthesised=synthesised,
         reused=len(segments) - synthesised,
+        speed=speed,
     )
     return SpeechTimeline(entries=entries, total_duration_sec=measured.duration_sec)
 

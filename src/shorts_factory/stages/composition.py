@@ -16,13 +16,21 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from ..domain import AssetLedger, AssetType, Manifest, PipelineState, ScenePlan
+from ..config import HighlightStyle
+from ..domain import AssetLedger, AssetType, Manifest, PipelineState, Scene, ScenePlan
 from ..errors import MediaError, PipelineValidationError
-from ..media import SfxPlacement, compose, normalize_image, normalize_video, probe
+from ..media import (
+    HighlightBox,
+    SfxPlacement,
+    compose,
+    normalize_image,
+    normalize_video,
+    probe,
+)
 from ..pipeline.checkpoint import load_assets, require_manifest, require_scenes, save_project
 from ..pipeline.context import RunContext
 from ..quality import QAReport, assess, check_clip, check_final_video
-from ..utils import atomic_write_model, relative_to
+from ..utils import atomic_write_json, atomic_write_model, read_json, relative_to, sha256_text
 from ._plan import StagePlan
 
 STAGE_NAME = "compose"
@@ -37,9 +45,39 @@ def resolve_source(context: RunContext, relative_path: str) -> Path:
     return candidate if candidate.exists() else Path(relative_path)
 
 
-def clip_is_current(clip: Path, duration: float) -> bool:
+def clip_recipe(
+    source: Path, duration: float, box: HighlightBox | None, style: HighlightStyle
+) -> str:
+    """Everything that decides what a normalised clip looks like.
+
+    Duration alone used to be the whole test, which meant a clip survived any
+    change that did not move its length -- a regenerated source asset, or now a
+    highlight box appearing on it. Both produce a clip that looks nothing like
+    the one on disk and measures the same.
+    """
+    parts = [
+        str(source),
+        f"{duration:.3f}",
+        box.model_dump_json() if box is not None else "none",
+        style.model_dump_json() if box is not None else "none",
+    ]
+    return sha256_text("|".join(parts))
+
+
+def clip_is_current(
+    clip: Path, duration: float, recipe: str | None = None, meta: Path | None = None
+) -> bool:
     if not clip.exists():
         return False
+    if recipe is not None and meta is not None:
+        try:
+            recorded = read_json(meta).get("recipe")
+        except (OSError, ValueError):
+            # No recipe recorded means the clip predates this check. Re-encoding
+            # once is cheaper than shipping a stale frame nobody looked at.
+            return False
+        if recorded != recipe:
+            return False
     try:
         info = probe(clip)
     except MediaError:
@@ -47,8 +85,37 @@ def clip_is_current(clip: Path, duration: float) -> bool:
     return abs(info.duration_sec - duration) <= 0.05
 
 
+def highlight_for(context: RunContext, scene: Scene, duration: float) -> HighlightBox | None:
+    """The box to draw on one scene, clamped to the duration it actually gets.
+
+    A scene's planned duration and its manifest duration are not the same
+    number: the manifest one is measured from the voice, and the last scene
+    additionally absorbs the tail padding. A box timed against the plan would
+    drift, and on a shortened scene it could be scheduled entirely past the end
+    of the clip, where ffmpeg draws nothing and says nothing about it.
+    """
+    if scene.highlight is None or not context.settings.highlight.enabled:
+        return None
+
+    box = scene.highlight
+    start = min(box.start_sec, max(duration - 0.2, 0.0))
+    remaining = duration - start
+    if remaining <= 0:
+        context.log.warning("highlight_dropped", scene=scene.id, reason="no room in the shot")
+        return None
+    span = remaining if box.duration_sec is None else min(box.duration_sec, remaining)
+    return HighlightBox(
+        x=box.x,
+        y=box.y,
+        width=box.width,
+        height=box.height,
+        start_sec=round(start, 3),
+        duration_sec=round(span, 3),
+    )
+
+
 async def normalize_scene_clips(
-    context: RunContext, manifest: Manifest, ledger: AssetLedger
+    context: RunContext, manifest: Manifest, ledger: AssetLedger, plan: ScenePlan | None = None
 ) -> list[Path]:
     """Bring every scene to identical codec parameters and its final duration."""
     clips: list[Path] = []
@@ -58,12 +125,17 @@ async def normalize_scene_clips(
             raise PipelineValidationError(f"scene {entry.scene_id} has no asset to compose")
 
         clip = context.workspace.scene_clip(entry.scene_id)
-        if not context.force and clip_is_current(clip, entry.duration):
+        source = resolve_source(context, record.local_path)
+        scene = plan.scene_by_id(entry.scene_id) if plan else None
+        box = highlight_for(context, scene, entry.duration) if scene else None
+        recipe = clip_recipe(source, entry.duration, box, context.settings.highlight)
+
+        meta = context.workspace.clip_meta(entry.scene_id)
+        if not context.force and clip_is_current(clip, entry.duration, recipe, meta):
             context.log.debug("clip_reused", scene=entry.scene_id)
             clips.append(clip)
             continue
 
-        source = resolve_source(context, record.local_path)
         if not source.exists():
             raise PipelineValidationError(f"scene {entry.scene_id}: {source} is missing")
 
@@ -75,6 +147,8 @@ async def normalize_scene_clips(
                 output=context.settings.output,
                 motion_index=index,
                 static=record.asset_type is AssetType.IMAGE,
+                highlight=box,
+                highlight_style=context.settings.highlight,
             )
         else:
             await normalize_video(
@@ -82,8 +156,16 @@ async def normalize_scene_clips(
                 clip,
                 duration_sec=entry.duration,
                 output=context.settings.output,
+                highlight=box,
+                highlight_style=context.settings.highlight,
             )
-        context.log.info("clip_normalized", scene=entry.scene_id, duration=entry.duration)
+        atomic_write_json(meta, {"recipe": recipe})
+        context.log.info(
+            "clip_normalized",
+            scene=entry.scene_id,
+            duration=entry.duration,
+            highlight=bool(box),
+        )
         clips.append(clip)
     return clips
 
@@ -162,7 +244,7 @@ async def run(context: RunContext) -> Path:
     ledger = load_assets(context.workspace)
     production = context.production_ready
 
-    clips = await normalize_scene_clips(context, manifest, ledger)
+    clips = await normalize_scene_clips(context, manifest, ledger, scene_plan)
 
     report = QAReport()
     for clip, entry in zip(clips, manifest.scenes, strict=True):

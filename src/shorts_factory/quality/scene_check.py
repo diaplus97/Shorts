@@ -125,6 +125,20 @@ def check_scene_plan(
             )
         )
 
+    # A box is emphasis, and emphasis is relative. Boxing most of the shots
+    # says nothing about any of them.
+    boxed = [scene.id for scene in plan.scenes if scene.highlight is not None]
+    limit = scene_settings.max_highlight_ratio
+    if plan.scenes and limit > 0 and len(boxed) > len(plan.scenes) * limit:
+        issues.append(
+            warning(
+                "scene_highlight_overuse",
+                f"{len(boxed)} of {len(plan.scenes)} scenes carry a highlight box "
+                f"(over {limit:.0%}). Keep the box for the shots where the narration "
+                "names one part of a busy frame; elsewhere it is just a border.",
+            )
+        )
+
     scene_narration = normalize_whitespace(" ".join(scene.narration for scene in plan.scenes))
     if scene_narration != normalize_whitespace(script.narration):
         issues.append(

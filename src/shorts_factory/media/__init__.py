@@ -3,14 +3,16 @@
 from .audio import (
     AudioAnalysis,
     analyze_audio,
+    atempo_chain,
     audio_problems,
     concat_with_gaps,
     render_silence,
+    retime,
 )
 from .compose import SfxPlacement, compose, write_concat_list
 from .ffmpeg import ffmpeg_path, ffprobe_path, has_filter, is_available, run, run_async, version
 from .ffprobe import MediaInfo, probe
-from .normalize import normalize_image, normalize_video
+from .normalize import HighlightBox, highlight_filter, normalize_image, normalize_video
 from .subtitles import (
     SubtitleCue,
     SubtitleSegment,
@@ -25,11 +27,13 @@ from .subtitles import (
 
 __all__ = [
     "AudioAnalysis",
+    "HighlightBox",
     "MediaInfo",
     "SfxPlacement",
     "SubtitleCue",
     "SubtitleSegment",
     "analyze_audio",
+    "atempo_chain",
     "audio_problems",
     "build_cues",
     "compose",
@@ -39,6 +43,7 @@ __all__ = [
     "format_ass_timestamp",
     "format_timestamp",
     "has_filter",
+    "highlight_filter",
     "is_available",
     "normalize_image",
     "normalize_video",
@@ -46,6 +51,7 @@ __all__ = [
     "render_ass",
     "render_silence",
     "render_srt",
+    "retime",
     "run",
     "run_async",
     "version",

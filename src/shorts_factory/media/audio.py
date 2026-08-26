@@ -6,6 +6,7 @@ cannot tell the difference, so the render gate measures the signal itself.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -121,6 +122,67 @@ def audio_problems(analysis: AudioAnalysis, settings: AudioQualitySettings) -> l
             f"{settings.max_silence_ratio:.0%} limit"
         )
     return problems
+
+
+def atempo_chain(speed: float) -> str:
+    """An ``atempo`` chain for any speed, including ones one stage cannot do.
+
+    ``atempo`` accepts a factor between 0.5 and 2.0. Beyond that range ffmpeg
+    rejects the filter rather than clamping it, so a larger change is expressed
+    as several stages multiplied together. Unlike ``asetrate``, ``atempo``
+    leaves the pitch alone: the voice speeds up without turning into a chipmunk.
+    """
+    if speed <= 0:
+        raise MediaError(f"playback speed must be positive, got {speed}")
+
+    factors: list[float] = []
+    remaining = speed
+    while remaining > 2.0:
+        factors.append(2.0)
+        remaining /= 2.0
+    while remaining < 0.5:
+        factors.append(0.5)
+        remaining /= 0.5
+    factors.append(remaining)
+    return ",".join(f"atempo={factor:.6f}" for factor in factors)
+
+
+async def retime(
+    source: str | Path,
+    destination: str | Path,
+    *,
+    speed: float,
+    sample_rate: int,
+    channels: int = 1,
+) -> Path:
+    """Re-render an audio file at a different pace, pitch unchanged.
+
+    Writing over the source is allowed and is the usual call here: ffmpeg
+    cannot read and write one path in the same command, so the render goes to a
+    sibling file and is moved into place. That move is atomic, so an interrupted
+    retime leaves the original intact rather than a truncated file that the
+    unit cache would then happily reuse.
+    """
+    target = Path(destination)
+    ensure_dir(target.parent)
+    layout = "mono" if channels == 1 else "stereo"
+
+    in_place = Path(source).resolve() == target.resolve()
+    written = target.with_name(f"{target.stem}.retime{target.suffix}") if in_place else target
+
+    await run_async(
+        [
+            "-i",
+            str(source),
+            "-af",
+            f"{atempo_chain(speed)},aresample={sample_rate},aformat=channel_layouts={layout}",
+            str(written),
+        ],
+        label=f"retime:{target.name}",
+    )
+    if in_place:
+        os.replace(written, target)
+    return target
 
 
 async def render_silence(

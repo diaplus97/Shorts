@@ -147,6 +147,14 @@ class ProjectWorkspace:
     def scene_clip(self, scene_id: str) -> Path:
         return self.scene_dir(scene_id) / "final.mp4"
 
+    def clip_meta(self, scene_id: str) -> Path:
+        """What the normalised clip for this scene was built from.
+
+        A clip is expensive to re-encode and cheap to describe, so the recipe
+        is written beside it and compared before reusing it.
+        """
+        return self.scene_dir(scene_id) / "clip.json"
+
     def scene_prompt_file(self, scene_id: str) -> Path:
         return self.scene_prompts_dir / f"{scene_id}.txt"
 

@@ -155,6 +155,17 @@ class TTSSettings(BaseModel):
     #: This is where the tone profile reaches it.
     style_instruction: str = ""
 
+    #: Delivery pace, as a multiple of whatever the model hands back.
+    #:
+    #: Gemini TTS has no speed parameter. Asking for a faster read inside
+    #: ``style_instruction`` sometimes works, by an amount nobody can predict,
+    #: which is not something a pipeline can build cut timings on. Retiming the
+    #: rendered audio is exact, free and repeatable, and it happens before the
+    #: durations are measured, so scene cuts and subtitles follow it without
+    #: anything else changing. ``atempo`` preserves pitch, so a faster read
+    #: still sounds like the same voice.
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
+
 
 class ScriptSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -176,6 +187,11 @@ class SceneSettings(BaseModel):
     min_scene_duration_sec: float = 1.5
     max_scene_duration_sec: float = 9.0
 
+    #: How many scenes may carry a highlight box, as a fraction of the plan. A
+    #: box on every shot is a frame around the video, not a finger pointing at
+    #: something; it only reads as emphasis while most shots do not have one.
+    max_highlight_ratio: float = 0.5
+
 
 class SubtitleSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -192,6 +208,24 @@ class SubtitleSettings(BaseModel):
     #: ASS colour (&HBBGGRR) used for the one stressed word in a cue.
     emphasis_colour: str = "&H0055D7FF"
     burn_in: bool = True
+
+
+class HighlightStyle(BaseModel):
+    """How a scene's highlight box is drawn.
+
+    Yellow by default because it is what the reference Short uses and because it
+    survives being laid over machine interiors, which are almost always grey.
+    Matches the subtitle emphasis colour so the two reads as one design rather
+    than two.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Any colour ffmpeg parses. 0xFFD755 is subtitles.emphasis_colour in RGB.
+    colour: str = "0xFFD755@0.95"
+    #: Outline width in pixels at the configured resolution.
+    thickness: int = Field(default=8, ge=1, le=64)
+    enabled: bool = True
 
 
 class OutputSettings(BaseModel):
@@ -253,6 +287,7 @@ class Settings(BaseModel):
     script: ScriptSettings = Field(default_factory=ScriptSettings)
     scenes: SceneSettings = Field(default_factory=SceneSettings)
     subtitles: SubtitleSettings = Field(default_factory=SubtitleSettings)
+    highlight: HighlightStyle = Field(default_factory=HighlightStyle)
     output: OutputSettings = Field(default_factory=OutputSettings)
     audio: AudioSettings = Field(default_factory=AudioSettings)
     retry: RetrySettings = Field(default_factory=RetrySettings)

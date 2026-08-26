@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..config import OutputSettings
+from pydantic import BaseModel, ConfigDict
+
+from ..config import HighlightStyle, OutputSettings
 from ..errors import MediaError
 from ..utils import ensure_dir
 from .ffmpeg import run_async
@@ -16,6 +18,25 @@ from .ffprobe import probe
 
 #: Ken Burns variants, cycled by scene order so consecutive stills differ.
 _MOTIONS = ("zoom_in", "zoom_out", "pan_right", "pan_left")
+
+
+class HighlightBox(BaseModel):
+    """A rectangle to outline on one clip, in frame fractions.
+
+    The media layer keeps its own shape here for the same reason it keeps
+    ``SfxPlacement``: nothing under ``media/`` imports the domain models, so a
+    scene schema change cannot reach down and break the renderer. The
+    composition stage translates a ``Scene.highlight`` into one of these.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: float
+    y: float
+    width: float
+    height: float
+    start_sec: float = 0.0
+    duration_sec: float | None = None
 
 
 def _encode_args(output: OutputSettings) -> list[str]:
@@ -46,12 +67,48 @@ def _fit_filter(output: OutputSettings) -> str:
     )
 
 
+def highlight_filter(
+    box: HighlightBox,
+    *,
+    output: OutputSettings,
+    duration_sec: float,
+    style: HighlightStyle,
+) -> str:
+    """A ``drawbox`` outline over the part of the shot being talked about.
+
+    ``drawbox`` is used rather than ``drawtext`` deliberately: it needs no font
+    and no libfreetype, so it works on the stripped static ffmpeg builds that
+    cannot render text at all. The label on a HighlightSpec is therefore review
+    material, not something that reaches the screen.
+
+    The box is drawn on the clip rather than at composition time because the
+    coordinates belong to one shot, and by composition every shot has been
+    concatenated into one stream where they would mean nothing.
+    """
+    width, height = output.resolution
+    x = round(box.x * width)
+    y = round(box.y * height)
+    w = max(round(box.width * width), style.thickness * 2)
+    h = max(round(box.height * height), style.thickness * 2)
+
+    start = max(box.start_sec, 0.0)
+    end = duration_sec if box.duration_sec is None else min(start + box.duration_sec, duration_sec)
+    drawn = f"drawbox=x={x}:y={y}:w={w}:h={h}:color={style.colour}:t={style.thickness}"
+    if start <= 0 and end >= duration_sec:
+        return drawn
+    # An always-on box is a frame, not a pointer. Timing it to the sentence that
+    # names the part is the whole reason it reads as an explanation.
+    return f"{drawn}:enable='between(t,{start:.3f},{end:.3f})'"
+
+
 async def normalize_video(
     source: str | Path,
     destination: str | Path,
     *,
     duration_sec: float,
     output: OutputSettings,
+    highlight: HighlightBox | None = None,
+    highlight_style: HighlightStyle | None = None,
 ) -> Path:
     """Crop/scale a generated clip to the output spec and to an exact duration.
 
@@ -61,6 +118,13 @@ async def normalize_video(
     target = Path(destination)
     ensure_dir(target.parent)
     filters = f"{_fit_filter(output)},tpad=stop_mode=clone:stop_duration={duration_sec:.3f}"
+    if highlight is not None:
+        filters += "," + highlight_filter(
+            highlight,
+            output=output,
+            duration_sec=duration_sec,
+            style=highlight_style or HighlightStyle(),
+        )
     await run_async(
         [
             "-i",
@@ -86,6 +150,8 @@ async def normalize_image(
     output: OutputSettings,
     motion_index: int = 0,
     static: bool = False,
+    highlight: HighlightBox | None = None,
+    highlight_style: HighlightStyle | None = None,
 ) -> Path:
     """Render a still into a moving clip (the video-generation fallback).
 
@@ -135,6 +201,15 @@ async def normalize_image(
         f"zoompan=z='{zoom}':x='{x_expr}':y='{y_expr}':d=1:s={width}x{height}:fps={output.fps},"
         f"setsar=1,format={output.pixel_format}"
     )
+    if highlight is not None:
+        # After zoompan, not before: the box is placed in output-frame
+        # coordinates, and a Ken Burns move would otherwise drag it off target.
+        filters += "," + highlight_filter(
+            highlight,
+            output=output,
+            duration_sec=duration_sec,
+            style=highlight_style or HighlightStyle(),
+        )
     await run_async(
         [
             "-loop",

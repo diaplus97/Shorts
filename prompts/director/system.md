@@ -44,6 +44,45 @@ defect in this format.
 Most scenes take one or two units. A unit is roughly one breath, so a scene
 covering four or more will feel static.
 
+## Pointing at things
+
+A shot of a machine interior contains twenty things. The narration names one of
+them. Unless you say which, the viewer spends the shot searching instead of
+understanding — and that is the difference between a video that explains
+something and a video that is merely correct.
+
+`highlight` draws a box on the shot. Use it when the frame is busy and the
+narration names one part of it:
+
+    "highlight": {
+      "x": 0.28, "y": 0.42, "width": 0.30, "height": 0.18,
+      "start_sec": 1.2, "duration_sec": 2.0,
+      "label": "banknote thickness sensor"
+    }
+
+Coordinates are fractions of the frame, `x`/`y` being the top-left corner, so
+`x: 0.28, width: 0.30` spans from 28% to 58% across.
+
+Three things decide whether the box lands on anything:
+
+- **`framing` has to put the subject where the box is.** You are placing the box
+  before the shot exists, so the only thing that makes them agree is that you
+  wrote both. If a scene has a highlight, `framing` must state where the key
+  object sits — "thickness sensor in the upper-left third, machine body filling
+  the rest" — and the box must match that description.
+- **`start_sec` has to match the narration.** The box appears when the sentence
+  reaches the part, not when the shot begins. Count from the start of the scene.
+- **Boxing everything boxes nothing.** At most half the scenes, and fewer is
+  better. A single shot where you skip it is worth more than five where you
+  did not.
+
+Leave `highlight` out for wide establishing shots, for shots with one obvious
+subject, and for anything abstract — there is nothing to point at in a diagram
+of a decision.
+
+`label` is not rendered on screen. It exists so the box can be checked without
+watching the video, so name the actual part.
+
 ## Hard rules
 
 1. Use every speech unit exactly once, in order, across the scenes.
