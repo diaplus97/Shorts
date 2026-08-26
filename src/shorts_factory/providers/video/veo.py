@@ -101,6 +101,7 @@ class VeoVideoProvider:
         duration_sec: float,
         aspect_ratio: str,
         negative_prompt: str | None = None,
+        first_frame: str | Path | None = None,
     ) -> str:
         assert_live_calls_allowed(self.name)
         snapped = self.snap_duration(duration_sec)
@@ -132,7 +133,7 @@ class VeoVideoProvider:
             parameters["resolution"] = self.resolution
         parameters.update(self.extra_parameters)
 
-        body = await self._submit_dropping_rejected(prompt, parameters)
+        body = await self._submit_dropping_rejected(prompt, parameters, first_frame)
         operation = body.get("name")
         if not operation:
             raise ProviderError(
@@ -142,7 +143,10 @@ class VeoVideoProvider:
         return str(operation)
 
     async def _submit_dropping_rejected(
-        self, prompt: str, parameters: dict[str, Any]
+        self,
+        prompt: str,
+        parameters: dict[str, Any],
+        first_frame: str | Path | None = None,
     ) -> dict[str, Any]:
         """POST the request, retrying without any tuning field Veo rejects.
 
@@ -159,12 +163,13 @@ class VeoVideoProvider:
         """
         attempted = dict(parameters)
         dropped: list[str] = []
+        instance = build_instance(prompt, first_frame)
         while True:
             try:
                 return await self._request(
                     "POST",
                     f"{self.base_url}/models/{self.model}:predictLongRunning",
-                    json={"instances": [{"prompt": prompt}], "parameters": attempted},
+                    json={"instances": [instance], "parameters": attempted},
                 )
             except ContentBlockedError:
                 raise
@@ -321,6 +326,49 @@ DROPPABLE_PARAMETERS = (
     "sampleCount",
     "negativePrompt",
 )
+
+
+#: Extensions Veo accepts as a conditioning frame, mapped to their MIME type.
+_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+}
+
+
+def build_instance(prompt: str, first_frame: str | Path | None) -> dict[str, Any]:
+    """The request instance, optionally pinned to a picture that already exists.
+
+    Text-to-video redesigns the machine on every call: a different roller count,
+    a different layout, banknotes travelling the other way. Each clip is
+    individually plausible and together they are twelve machines. Handing Veo
+    the first frame moves the design decision out of the video model, which only
+    has to animate what it was given.
+
+    **Not verified against the live API.** Veo's documented image-to-video shape
+    puts the picture on the instance next to the prompt; if a revision moves it,
+    this is the one place that changes.
+    """
+    instance: dict[str, Any] = {"prompt": prompt}
+    if first_frame is None:
+        return instance
+
+    source = Path(first_frame)
+    mime = _MIME_TYPES.get(source.suffix.lower())
+    if mime is None:
+        raise ProviderError(
+            f"cannot send {source.suffix or 'a file with no extension'} as a first frame; "
+            f"expected one of {', '.join(sorted(_MIME_TYPES))}",
+            provider="veo",
+        )
+    if not source.exists():
+        raise ProviderError(f"first frame {source} does not exist", provider="veo")
+
+    instance["image"] = {
+        "bytesBase64Encoded": base64.b64encode(source.read_bytes()).decode("ascii"),
+        "mimeType": mime,
+    }
+    return instance
 
 
 def find_rejected_parameter(message: str, sent: dict[str, Any]) -> str | None:

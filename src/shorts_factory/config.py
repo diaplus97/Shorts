@@ -124,6 +124,30 @@ class VideoSettings(BaseModel):
     #: Escape hatch for a request field this code does not know about.
     extra_parameters: dict[str, Any] = Field(default_factory=dict)
 
+    #: Generate one still per scene first, and hand it to the video model as
+    #: the opening frame, instead of describing the machine again every call.
+    #:
+    #: Text-to-video redesigns the subject on every request. Each clip is
+    #: individually plausible and together they are twelve different machines --
+    #: different layout, different part count, the thing travelling the other
+    #: way. No amount of prose in the world spec fixes it, because prose is
+    #: exactly what the model is re-interpreting each time.
+    #:
+    #: Costs one image per video scene plus one anchor for the whole Short. At
+    #: Gemini's rate that is well under a dollar against a Veo bill in the
+    #: several dollars, and a failed video scene reuses its opening frame as the
+    #: fallback still rather than buying a second picture.
+    anchor_frames: bool = True
+
+    # -- fal.ai -----------------------------------------------------------
+    #: Models on fal each have their own input schema. These name the fields
+    #: this one uses so a different model needs a config change, not a code
+    #: change. Set a field to null to leave it out of the request entirely.
+    aspect_ratio_field: str | None = "aspect_ratio"
+    duration_field: str | None = "duration"
+    #: Some models take duration as "5" rather than 5.
+    duration_as_string: bool = False
+
 
 class ImageSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -543,6 +567,32 @@ class VisualStyles(BaseModel):
 
     style: StyleBible = Field(default_factory=StyleBible)
     reality_type_style: dict[str, RealityTypeStyle] = Field(default_factory=dict)
+
+    #: The look of the anchor frame, and through it of the whole Short.
+    anchor_style: str = ""
+
+    #: Reality types that are *drawn* as something other than what the director
+    #: labelled them, as ``{labelled: drawn_as}``.
+    #:
+    #: This exists because of one specific failure. The director prompt says not
+    #: to label an explanatory visualisation ``observed``; the model labelled
+    #: every scene ``observed`` anyway, nothing checked, and so every shot in a
+    #: Short whose reference is a technical drawing was ordered as documentary
+    #: footage. Photorealism is the one choice that cannot be walked back later:
+    #: a drawing that should have been footage is merely a style miss, while
+    #: footage of a machine interior nobody has ever filmed asserts something
+    #: the sources do not support.
+    #:
+    #: Redirecting rather than forcing one value everywhere is deliberate.
+    #: ``conceptual`` and ``reconstructed`` are both drawings and they are not
+    #: the same drawing -- a flow of data is not a machine cutaway -- so
+    #: collapsing them would trade one wrong look for another.
+    #:
+    #: The label itself is left alone: the honesty checks still see what the
+    #: director claimed. This only decides how it is rendered.
+    redirect_reality_types: dict[str, str] = Field(
+        default_factory=lambda: {"observed": "reconstructed"}
+    )
 
 
 class AppConfig(BaseModel):

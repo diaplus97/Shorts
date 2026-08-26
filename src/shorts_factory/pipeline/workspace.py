@@ -147,6 +147,23 @@ class ProjectWorkspace:
     def scene_clip(self, scene_id: str) -> Path:
         return self.scene_dir(scene_id) / "final.mp4"
 
+    @property
+    def anchor_frame(self) -> Path:
+        """The one picture that fixes what the machine looks like.
+
+        Lives outside any scene directory because it belongs to the Short, not
+        to a shot: every scene's opening frame is generated from it.
+        """
+        return self.assets_dir / "_world" / "anchor.png"
+
+    @property
+    def anchor_meta(self) -> Path:
+        return self.assets_dir / "_world" / "anchor.json"
+
+    def scene_first_frame(self, scene_id: str) -> Path:
+        """The opening frame handed to the video model for this scene."""
+        return self.scene_dir(scene_id) / "first_frame.png"
+
     def clip_meta(self, scene_id: str) -> Path:
         """What the normalised clip for this scene was built from.
 

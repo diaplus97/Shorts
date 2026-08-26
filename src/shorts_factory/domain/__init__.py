@@ -20,7 +20,7 @@ from .enums import (
 from .manifest import Manifest, ManifestScene
 from .project import CostSummary, Project, StageRecord, utcnow
 from .research import Claim, QuestionSpec, ResearchResult, SourceRef
-from .scene import ContinuitySpec, HighlightSpec, Scene, ScenePlan, WorldSpec
+from .scene import ColourRole, ContinuitySpec, HighlightSpec, Scene, ScenePlan, WorldSpec
 from .script import ScriptBeat, ScriptResult
 from .speech import (
     MAX_PAUSE_MS,
@@ -45,6 +45,7 @@ __all__ = [
     "BeatPurpose",
     "Claim",
     "ClaimConfidence",
+    "ColourRole",
     "ContentType",
     "ContinuitySpec",
     "CostSummary",

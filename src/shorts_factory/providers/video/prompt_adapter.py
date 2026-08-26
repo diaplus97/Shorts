@@ -29,6 +29,10 @@ class VideoPromptAdapter(Protocol):
         """One frame for a scene planned as a still, or whose video failed."""
         ...
 
+    def build_anchor_prompt(self, plan: ScenePlan) -> str:
+        """The establishing picture every scene in this Short is drawn from."""
+        ...
+
     def build_negative_prompt(self, scene: Scene) -> str: ...
 
 
@@ -44,9 +48,22 @@ class GenericPromptAdapter:
     def __init__(self, styles: VisualStyles) -> None:
         self.styles = styles
 
+    def _reality_style(self, scene: Scene):
+        """The look for one shot, after any redirect.
+
+        The director labelled every scene of the first real run ``observed``,
+        despite being told not to, so every shot was ordered as documentary
+        footage for a Short whose reference is a technical drawing.
+        ``redirect_reality_types`` is what stops that: the label survives for
+        the honesty checks, and only the rendering changes.
+        """
+        labelled = scene.reality_type.value
+        key = self.styles.redirect_reality_types.get(labelled, labelled)
+        return self.styles.reality_type_style.get(key)
+
     def build_prompt(self, scene: Scene, plan: ScenePlan | None = None) -> str:
         style = self.styles.style
-        reality = self.styles.reality_type_style.get(scene.reality_type.value)
+        reality = self._reality_style(scene)
 
         parts: list[str] = [
             scene.visual_subject.strip(),
@@ -91,7 +108,7 @@ class GenericPromptAdapter:
         where the next scene picks up.
         """
         style = self.styles.style
-        reality = self.styles.reality_type_style.get(scene.reality_type.value)
+        reality = self._reality_style(scene)
 
         parts: list[str] = [
             scene.visual_subject.strip(),
@@ -116,6 +133,43 @@ class GenericPromptAdapter:
         )
         parts.append("a single still frame, no motion blur")
         parts.append("vertical 9:16 framing, subject inside the safe area")
+        return ", ".join(part for part in parts if part.strip())
+
+    def build_anchor_prompt(self, plan: ScenePlan) -> str:
+        """The establishing picture every scene in this Short is drawn from.
+
+        Deliberately has no scene in it: it is the machine, not a moment. Each
+        scene's opening frame is then generated *from* this picture, which is
+        what makes shot four and shot nine the same object rather than two
+        things a model invented from the same paragraph.
+
+        The style here is the Short's style, fixed. It is not asked per scene
+        and it is not chosen by the director -- that choice is exactly what
+        produced photoreal footage for a Short whose reference is a diagram.
+        """
+        world = plan.world
+        parts: list[str] = [
+            f"a complete view of {world.machine_id.replace('_', ' ').lower()}",
+            world.environment.strip(),
+        ]
+        if world.cross_section:
+            parts.append(world.cross_section.strip())
+        else:
+            parts.append("a clean sectional view showing the internal layout")
+        if world.travel_direction:
+            parts.append(
+                f"the path through the machine runs {world.travel_direction.replace('_', ' ')}"
+            )
+        parts.extend(role.as_prompt_fragment() for role in world.colour_roles)
+        for spec in plan.continuity:
+            parts.append(f"{spec.continuity_id}: {spec.fixed_description.strip()}")
+        parts.append(world.visual_style.strip())
+
+        anchored = self.styles.anchor_style.strip()
+        if anchored:
+            parts.append(_squash(anchored))
+        parts.append("a single still frame, no motion blur, nothing cropped off")
+        parts.append("vertical 9:16 framing, the whole machine inside the safe area")
         return ", ".join(part for part in parts if part.strip())
 
     def build_negative_prompt(self, scene: Scene) -> str:

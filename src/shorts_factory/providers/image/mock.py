@@ -37,6 +37,7 @@ class MockImageProvider:
         height: int,
         destination: str | Path,
         negative_prompt: str | None = None,
+        reference_image: str | Path | None = None,
     ) -> ImageResult:
         target = Path(destination)
         ensure_dir(target.parent)

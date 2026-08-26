@@ -136,7 +136,16 @@ class ImageProvider(Protocol):
         height: int,
         destination: str | Path,
         negative_prompt: str | None = None,
-    ) -> ImageResult: ...
+        reference_image: str | Path | None = None,
+    ) -> ImageResult:
+        """One still.
+
+        ``reference_image`` asks for a picture of the thing already in that
+        image rather than a fresh invention -- the same machine, framed
+        differently. It is how a Short stops being twelve plausible machines.
+        A provider that cannot condition on an image ignores it.
+        """
+        ...
 
 
 @runtime_checkable
@@ -162,7 +171,15 @@ class VideoProvider(Protocol):
         duration_sec: float,
         aspect_ratio: str,
         negative_prompt: str | None = None,
-    ) -> str: ...
+        first_frame: str | Path | None = None,
+    ) -> str:
+        """Start one clip.
+
+        ``first_frame`` pins the shot to a picture that already exists instead
+        of letting the model design the machine again from the prompt. A
+        provider without image conditioning ignores it.
+        """
+        ...
 
     async def status(self, job_id: str) -> VideoJobState: ...
 

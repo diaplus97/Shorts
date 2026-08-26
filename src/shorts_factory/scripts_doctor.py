@@ -21,7 +21,7 @@ REQUIRED_SECRETS = {
     "llm": {"openai": "OPENAI_API_KEY", "gemini": "LLM_API_KEY"},
     "search": {"gemini": "SEARCH_API_KEY"},
     "image": {"gemini": "IMAGE_API_KEY"},
-    "video": {"veo": "VIDEO_API_KEY"},
+    "video": {"veo": "VIDEO_API_KEY", "fal": "FAL_KEY"},
     "tts": {"openai": "TTS_API_KEY", "gemini": "TTS_API_KEY"},
 }
 

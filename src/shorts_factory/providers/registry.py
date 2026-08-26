@@ -22,6 +22,8 @@ from .search.mock import MockSearchProvider
 from .tts.gemini import GeminiTTSProvider
 from .tts.mock import MockTTSProvider
 from .tts.openai import OpenAITTSProvider
+from .video.fal import DEFAULT_BASE_URL as FAL_BASE_URL
+from .video.fal import FalVideoProvider
 from .video.mock import MockVideoProvider
 from .video.prompt_adapter import GenericPromptAdapter, VideoPromptAdapter
 from .video.veo import VeoVideoProvider
@@ -146,6 +148,28 @@ def build_video(config: AppConfig) -> VideoProvider:
             width=config.settings.output.width,
             height=config.settings.output.height,
             fps=config.settings.output.fps,
+        )
+    if name == "fal":
+        if not video.model or "/" not in video.model:
+            raise ConfigError(
+                "video.model must be a fal model path such as "
+                "'fal-ai/kling-video/v2.6/pro/image-to-video'. Run "
+                "`python scripts/probe_fal.py --model <id>` to check one before a paid run."
+            )
+        # video.base_url defaults to Google's, which is right for Veo and wrong
+        # for everything else. Correcting it silently beats a config error the
+        # user has to go and fix by hand for no decision of theirs.
+        base_url = video.base_url if "fal.run" in video.base_url else FAL_BASE_URL
+        return FalVideoProvider(
+            model=video.model,
+            base_url=base_url,
+            allowed_durations=tuple(video.allowed_durations),
+            aspect_ratio_field=video.aspect_ratio_field,
+            duration_field=video.duration_field,
+            duration_as_string=video.duration_as_string,
+            extra_parameters=video.extra_parameters,
+            timeout_sec=video.timeout_sec,
+            download_timeout_sec=video.download_timeout_sec,
         )
     if name == "veo":
         if video.model in RETIRED_VIDEO_MODELS:

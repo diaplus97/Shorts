@@ -27,11 +27,42 @@ class ContinuitySpec(BaseModel):
     fixed_description: str
 
 
+class ColourRole(BaseModel):
+    """One part of the machine, always drawn in one colour.
+
+    Colour is the cheapest way to say "this is the same component you saw four
+    seconds ago" without the narration having to. It only works if it never
+    moves, which is why it is declared once for the whole Short rather than
+    described per scene.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: What is being coloured: "pickup roller", "reject path", "the banknote".
+    part: str
+    #: A plain colour name a generation model will not misread. Not a hex code.
+    colour: str
+    #: Why it is that colour, when the reason is load-bearing -- normal path
+    #: green against reject path red only reads if they are opposites.
+    meaning: str | None = None
+
+    def as_prompt_fragment(self) -> str:
+        return f"{self.part} is always {self.colour}"
+
+
 class WorldSpec(BaseModel):
     """The single physical world every scene in one Short shares.
 
     Without this, twelve scenes become twelve unrelated clips. With it they are
     twelve shots of one machine (spec v0.2 section 31).
+
+    Prose alone turned out not to be enough. A one-line description of a machine
+    lets a generation model rebuild the machine differently for every cut --
+    different roller count, different layout, banknotes travelling a different
+    way -- and the result is twelve clips of twelve machines that each look
+    plausible. The fields below are the parts a viewer uses to recognise that
+    two shots are of the same object, so they are declared once and repeated
+    into every prompt rather than left to prose.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -39,10 +70,31 @@ class WorldSpec(BaseModel):
     machine_id: str
     visual_style: str
     environment: str
+
+    #: The one view the whole Short is filmed from -- "vertical cross-section
+    #: cut through the deposit module, seen from the left side". Every scene is
+    #: a closer or wider look at *this* view, never a different one.
+    cross_section: str | None = None
+
+    #: Which way the thing being followed travels through the frame. A banknote
+    #: going right in one shot and left in the next reads as two machines.
+    travel_direction: (
+        Literal["left_to_right", "right_to_left", "top_to_bottom", "bottom_to_top"] | None
+    ) = None
+
+    #: Fixed colours for the parts that recur. Keep it short: past about four,
+    #: nothing is distinguishable and the picture turns into a parts catalogue.
+    colour_roles: list[ColourRole] = Field(default_factory=list)
+
     notes: str | None = None
 
     def as_prompt_fragment(self) -> str:
         parts = [self.environment.strip(), self.visual_style.strip()]
+        if self.cross_section:
+            parts.append(f"always the same view: {self.cross_section.strip()}")
+        if self.travel_direction:
+            parts.append(f"movement travels {self.travel_direction.replace('_', ' ')}")
+        parts.extend(role.as_prompt_fragment() for role in self.colour_roles)
         if self.notes:
             parts.append(self.notes.strip())
         return ", ".join(part for part in parts if part)

@@ -89,3 +89,24 @@ reality_type_style:
     suffix: >
       explanatory diagrammatic visualisation, flat graphic treatment, limited
       palette, clearly stylised so it is not mistaken for real internal footage
+
+# The look of the anchor frame -- the one picture every scene is generated from.
+anchor_style: >
+  a complete technical cutaway illustration of the whole machine, engineering
+  drawing proportions, clean flat sectional view, matte surfaces, even lighting,
+  no photographic depth of field, visibly a diagram rather than a photograph
+
+# Reality types drawn as something other than what the director labelled them.
+#
+# The director labelled every scene of the first real run "observed" -- despite
+# the prompt telling it not to -- so every shot came out as photoreal footage in
+# a Short whose reference is a technical drawing. Nothing checked.
+#
+# Photorealism is the one choice that cannot be walked back: a drawing that
+# should have been footage is a style miss, while footage of a machine interior
+# nobody has ever filmed asserts something the sources do not support.
+#
+# conceptual and reconstructed are left alone -- both are drawings, and a flow
+# of data is not a machine cutaway. Empty the mapping to trust the director.
+redirect_reality_types:
+  observed: reconstructed

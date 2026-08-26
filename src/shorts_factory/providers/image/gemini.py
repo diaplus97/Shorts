@@ -92,6 +92,7 @@ class GeminiImageProvider:
         height: int,
         destination: str | Path,
         negative_prompt: str | None = None,
+        reference_image: str | Path | None = None,
     ) -> ImageResult:
         assert_live_calls_allowed(self.name)
         target = Path(destination)
@@ -110,7 +111,7 @@ class GeminiImageProvider:
         }
         config.update(self.extra_parameters)
 
-        body = await self._generate_dropping_rejected(text, config)
+        body = await self._generate_dropping_rejected(text, config, reference_image)
 
         payload = find_image_bytes(body)
         if payload is None:
@@ -133,7 +134,10 @@ class GeminiImageProvider:
         return ImageResult(path=str(target), model=self.model)
 
     async def _generate_dropping_rejected(
-        self, text: str, config: dict[str, Any]
+        self,
+        text: str,
+        config: dict[str, Any],
+        reference_image: str | Path | None = None,
     ) -> dict[str, Any]:
         """POST, retrying without any config field the model rejects.
 
@@ -144,12 +148,13 @@ class GeminiImageProvider:
         """
         attempted = dict(config)
         dropped: list[str] = []
+        parts = build_parts(text, reference_image)
         while True:
             try:
                 return await self._request(
                     f"{self.base_url}/models/{self.model}:generateContent",
                     {
-                        "contents": [{"parts": [{"text": text}]}],
+                        "contents": [{"parts": parts}],
                         "generationConfig": attempted,
                     },
                 )
@@ -208,6 +213,50 @@ class GeminiImageProvider:
             raise ProviderError(
                 f"the image model returned non-JSON: {response.text[:300]}", provider=self.name
             ) from exc
+
+
+#: Extensions generateContent accepts as image input, mapped to their MIME type.
+_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+
+
+def build_parts(text: str, reference_image: str | Path | None) -> list[dict[str, Any]]:
+    """The request parts, with a reference picture in front of the instruction.
+
+    This is what turns the call from "invent a machine" into "the machine in
+    this picture, framed differently". generateContent is the same endpoint
+    either way; an image part is simply added, which is the one advantage of
+    the image models living on the text API.
+
+    The image goes first deliberately. The instruction that follows reads as
+    being *about* the picture rather than as a description competing with it.
+    """
+    parts: list[dict[str, Any]] = []
+    if reference_image is not None:
+        source = Path(reference_image)
+        mime = _MIME_TYPES.get(source.suffix.lower())
+        if mime is None:
+            raise ProviderError(
+                f"cannot send {source.suffix or 'a file with no extension'} as a reference "
+                f"image; expected one of {', '.join(sorted(_MIME_TYPES))}",
+                provider="gemini",
+            )
+        if not source.exists():
+            raise ProviderError(f"reference image {source} does not exist", provider="gemini")
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": mime,
+                    "data": base64.b64encode(source.read_bytes()).decode("ascii"),
+                }
+            }
+        )
+    parts.append({"text": text})
+    return parts
 
 
 def _closest_ratio(width: int, height: int, default: str) -> str:

@@ -57,8 +57,12 @@ class MockVideoProvider:
         duration_sec: float,
         aspect_ratio: str,
         negative_prompt: str | None = None,
+        first_frame: str | Path | None = None,
     ) -> str:
-        job_id = "mockjob_" + sha256_text(f"{prompt}|{duration_sec}|{aspect_ratio}")[:16]
+        # The frame is part of what was ordered, so two otherwise identical
+        # submissions with different frames must not collide on one job id.
+        seed = f"{prompt}|{duration_sec}|{aspect_ratio}|{first_frame or ''}"
+        job_id = "mockjob_" + sha256_text(seed)[:16]
         should_fail = any(token in prompt for token in self.fail_prompt_substrings)
         # A resubmitted job id must be able to fail again, so overwrite.
         self._jobs[job_id] = _Job(

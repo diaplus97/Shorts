@@ -98,6 +98,26 @@ pricing:
     veo:
       usd_per_second: 0.40
 
+    # fal.ai routes one key to Kling, Wan, Seedance and others. Checked
+    # 2026-08-26 against published per-second rates; re-check before a paid run.
+    #
+    # The reason this section exists: Veo 3.1 Standard at $0.40/s is the most
+    # expensive option on the market, and it was the default here. A 65-second
+    # Short costs about $26 on it and about $3-5 on the models below. Same
+    # pipeline, same length, one config line.
+    #
+    #   fal-ai/kling-video/v2.6/pro/image-to-video     $0.07/s   consistency
+    #   fal-ai/wan/v2.6/image-to-video                 $0.05/s   cheapest solid
+    #   fal-ai/bytedance/seedance/v2/fast/i2v         ~$0.022/s  cheapest
+    #
+    # A rate keyed by the full model path wins over the "fal" fallback.
+    fal-ai/kling-video/v2.6/pro/image-to-video:
+      usd_per_second: 0.07
+    fal-ai/wan/v2.6/image-to-video:
+      usd_per_second: 0.05
+    fal:
+      usd_per_second: 0.10
+
   tts:
     mock:
       usd_per_1k_chars: 0.0

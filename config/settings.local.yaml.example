@@ -20,6 +20,10 @@ providers:
   image: gemini
   video: veo
   tts: gemini
+  # fal.ai routes one key to Kling, Wan, Seedance and the rest. Veo 3.1 Standard
+  # is $0.40/s -- the most expensive option on the market -- and prices a
+  # 65-second Short at about $26. The models below cost $3-5 for the same Short.
+  video: fal
 
 # Run `python scripts/list_gemini_models.py` first and use ids from its output.
 # A model missing from that list is not available to your key, whatever the
@@ -73,3 +77,26 @@ tts:
 
 # OpenAI is still wired for llm and tts if you would rather use it; set
 # providers.llm/tts to "openai" and put OPENAI_API_KEY and TTS_API_KEY in .env.
+
+# fal.ai video. Check one model with a single cheap call before a full run:
+#
+#     python scripts/probe_fal.py --model <id>
+#
+# It prints the raw request and response, so a rejected field name is visible
+# rather than discovered halfway through a paid run.
+video:
+  # $0.05/s. Swap for fal-ai/kling-video/v2.6/pro/image-to-video ($0.07/s) if
+  # shot-to-shot consistency needs more help than the anchor frame gives it.
+  model: fal-ai/wan/v2.6/image-to-video
+  base_url: https://queue.fal.run
+  # Empty means the model takes any length. Veo forced fixed lengths; most
+  # models on fal do not, and rounding up to one would overpay every scene.
+  allowed_durations: []
+  # Field names differ per model. probe_fal.py names whichever one is wrong.
+  duration_field: duration
+  aspect_ratio_field: aspect_ratio
+  duration_as_string: false
+  # One still per scene, generated from a single anchor picture and handed to
+  # the video model as its opening frame. This is what stops every cut being a
+  # differently designed machine. Adds roughly $0.04 per scene.
+  anchor_frames: true

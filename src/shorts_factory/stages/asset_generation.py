@@ -26,7 +26,7 @@ from ..errors import (
 from ..pipeline.checkpoint import load_assets, require_scenes, save_assets, save_project
 from ..pipeline.context import RunContext
 from ..providers import with_retry
-from ..utils import asset_prompt_hash, relative_to
+from ..utils import asset_prompt_hash, atomic_write_json, read_json, relative_to
 from ._plan import PlannedCall, StagePlan
 
 STAGE_NAME = "generate"
@@ -121,8 +121,129 @@ async def poll_until_done(context: RunContext, job_id: str) -> None:
         waited += settings.poll_interval_sec
 
 
+async def ensure_anchor(context: RunContext, plan: ScenePlan) -> Path | None:
+    """The one picture that decides what the machine looks like.
+
+    Generated once per Short from the world spec alone, then handed to every
+    scene's opening frame as a reference. Without it each scene describes the
+    machine in words and each call invents a different one -- different layout,
+    different part count, the subject travelling the other way. Twelve
+    individually plausible clips of twelve machines is the single most
+    destructive defect this pipeline had, and prose in the world spec never
+    fixed it because prose is exactly what is being re-interpreted each time.
+    """
+    if not context.settings.video.anchor_frames:
+        return None
+
+    target = context.workspace.anchor_frame
+    adapter = context.providers.prompt_adapter
+    prompt = adapter.build_anchor_prompt(plan)
+    negative = ", ".join(context.config.visual_styles.style.avoid)
+    fingerprint = image_hash_for(context, prompt, negative)
+
+    if not context.force and target.exists():
+        try:
+            if read_json(context.workspace.anchor_meta).get("hash") == fingerprint:
+                context.log.info("anchor_reused", path=str(target))
+                return target
+        except (OSError, ValueError):
+            pass
+
+    image = context.providers.image
+    settings = context.settings.image
+    estimated = context.guard.estimate_image_usd(image.name, 1)
+    context.guard.check_total(estimated, operation="image:anchor")
+
+    await with_retry(
+        "image:anchor",
+        lambda: image.generate(
+            prompt=prompt,
+            width=settings.width,
+            height=settings.height,
+            destination=target,
+            negative_prompt=negative or None,
+        ),
+        context.settings.retry,
+    )
+    context.tracker.record(
+        CostEvent(
+            kind="image",
+            provider=image.name,
+            operation="generate_image",
+            estimated_cost_usd=estimated,
+            actual_cost_usd=estimated,
+            metadata={"model": image.model, "anchor": True},
+        )
+    )
+    atomic_write_json(context.workspace.anchor_meta, {"hash": fingerprint, "prompt": prompt})
+    context.log.info("anchor_generated", path=str(target))
+    return target
+
+
+async def ensure_first_frame(
+    context: RunContext, scene: Scene, prompt: str, negative: str, anchor: Path | None
+) -> Path | None:
+    """This scene's opening frame, drawn from the anchor rather than from words.
+
+    Doubles as the fallback still: if video generation fails, the scene already
+    has a frame of the right machine on disk and does not buy a second picture.
+    """
+    if anchor is None:
+        return None
+
+    target = context.workspace.scene_first_frame(scene.id)
+    image = context.providers.image
+    settings = context.settings.image
+    estimated = context.guard.estimate_image_usd(image.name, 1)
+
+    context.guard.check_image_attempt(scene.id)
+    context.guard.check_total(estimated, operation=f"image:{scene.id}:frame")
+
+    await with_retry(
+        f"image_frame:{scene.id}",
+        lambda: image.generate(
+            prompt=prompt,
+            width=settings.width,
+            height=settings.height,
+            destination=target,
+            negative_prompt=negative or None,
+            reference_image=anchor,
+        ),
+        context.settings.retry,
+    )
+    context.tracker.record(
+        CostEvent(
+            kind="image",
+            provider=image.name,
+            operation="generate_image",
+            scene_id=scene.id,
+            estimated_cost_usd=estimated,
+            actual_cost_usd=estimated,
+            metadata={"model": image.model, "first_frame": True},
+        )
+    )
+    return target
+
+
+def image_hash_for(context: RunContext, prompt: str, negative: str) -> str:
+    provider = context.providers.image
+    image = context.settings.image
+    return asset_prompt_hash(
+        provider=provider.name,
+        model=provider.model,
+        prompt=prompt,
+        duration_sec=0.0,
+        aspect_ratio=f"{image.width}:{image.height}",
+        negative_constraints=[negative],
+    )
+
+
 async def generate_video_asset(
-    context: RunContext, scene: Scene, prompt: str, negative: str
+    context: RunContext,
+    scene: Scene,
+    prompt: str,
+    negative: str,
+    first_frame: Path | None = None,
 ) -> AssetRecord:
     """One paid video attempt. Raises on failure; the caller decides what next."""
     video = context.providers.video
@@ -140,6 +261,7 @@ async def generate_video_asset(
             duration_sec=seconds,
             aspect_ratio=context.settings.video.aspect_ratio,
             negative_prompt=negative or None,
+            first_frame=first_frame,
         ),
         context.settings.retry,
     )
@@ -227,7 +349,11 @@ async def generate_image_asset(
 
 
 async def generate_scene(
-    context: RunContext, scene: Scene, ledger: AssetLedger, plan: ScenePlan
+    context: RunContext,
+    scene: Scene,
+    ledger: AssetLedger,
+    plan: ScenePlan,
+    anchor: Path | None = None,
 ) -> AssetRecord:
     adapter = context.providers.prompt_adapter
     prompt = adapter.build_prompt(scene, plan)
@@ -248,11 +374,16 @@ async def generate_scene(
 
     max_attempts = context.config.budgets.video.max_scene_attempts
     last_error: str | None = None
+    first_frame: Path | None = None
 
     if wants_video(scene):
+        # Drawn from the anchor, so the clip animates the machine the rest of
+        # the Short is of rather than designing a new one. Bought once and
+        # reused if the video attempts fail, so the fallback costs nothing extra.
+        first_frame = await ensure_first_frame(context, scene, still_prompt, negative, anchor)
         for attempt in range(1, max_attempts + 1):
             try:
-                record = await generate_video_asset(context, scene, prompt, negative)
+                record = await generate_video_asset(context, scene, prompt, negative, first_frame)
             except BudgetExceededError as exc:
                 # Scene-level exhaustion falls back; a project-level overrun does not.
                 if "attempt budget" not in str(exc):
@@ -297,6 +428,23 @@ async def generate_scene(
     fallback = wants_video(scene)
     if fallback:
         context.log.warning("scene_fallback_to_image", scene=scene.id, reason=last_error)
+        if first_frame is not None and first_frame.exists():
+            # The opening frame is already a picture of the right machine at the
+            # right moment. Buying a second one would cost money to get something
+            # less consistent than what is on disk.
+            context.log.info("fallback_uses_first_frame", scene=scene.id)
+            return AssetRecord(
+                scene_id=scene.id,
+                provider=context.providers.image.name,
+                asset_type=AssetType.IMAGE_MOTION,
+                status=AssetStatus.COMPLETED,
+                prompt=still_prompt,
+                prompt_hash=image_hash(context, scene, still_prompt, negative),
+                local_path=relative_to(first_frame, context.workspace.root),
+                cost_usd=0.0,
+                fallback_used=True,
+                error=last_error,
+            )
     # A frame has no camera move and no "change during the shot". Passing the
     # video prompt verbatim asked a still for both, which is part of why a
     # fallback never matched the clips on either side of it.
@@ -364,8 +512,11 @@ async def run(context: RunContext) -> AssetLedger:
     scene_plan: ScenePlan = require_scenes(context.workspace)
     ledger = load_assets(context.workspace)
 
+    # One picture, bought before anything else, that every scene is drawn from.
+    anchor = await ensure_anchor(context, scene_plan)
+
     for scene in scene_plan.scenes:
-        record = await generate_scene(context, scene, ledger, scene_plan)
+        record = await generate_scene(context, scene, ledger, scene_plan, anchor)
         ledger.put(record)
         # Checkpoint after every scene so a crash never loses a paid asset.
         save_assets(context.workspace, ledger)

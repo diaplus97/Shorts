@@ -114,7 +114,18 @@ def test_the_shipped_example_is_a_working_override(config_copy: Path, config_dir
     assert "mock" not in providers.values(), (
         f"the example leaves a mock provider in place: {providers}"
     )
-    assert config.settings.video.allowed_durations == [4.0, 6.0, 8.0]
+    # Veo only returns fixed-length clips and the registry refuses to build it
+    # without the list; models on fal mostly take any length, and rounding up to
+    # a fixed one there would overpay every scene. So the invariant is not a
+    # constant -- it is that the example agrees with whichever provider it picks.
+    if providers["video"] == "veo":
+        assert config.settings.video.allowed_durations, (
+            "veo needs video.allowed_durations set, or the registry refuses to build it"
+        )
+    if providers["video"] == "fal":
+        assert "/" in config.settings.video.model, (
+            "a fal model is a path like 'fal-ai/wan/v2.6/image-to-video'"
+        )
 
 
 def test_the_committed_config_spends_nothing(config_copy: Path) -> None:
