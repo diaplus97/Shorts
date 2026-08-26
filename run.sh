@@ -4,6 +4,8 @@
 #   ./run.sh "ATM은 어떻게 지폐를 셀까?"
 #   ./run.sh --script-only "김치는 어떻게 발효될까?"   # stop before anything is paid for
 #   ./run.sh --resume third                          # continue an existing project
+#   ./run.sh --probe                                 # one cheap fal call, then stop
+#   ./run.sh --doctor                                # just the environment check
 #
 # Everything that used to be a separate paste lives here: pulling, the virtualenv,
 # the dependency install, the environment check, and the run. Each step says what
@@ -18,17 +20,21 @@ ok()   { printf "${GREEN}ok${OFF} %s\n" "$1"; }
 die()  { printf "${RED}stop${OFF} %s\n" "$1" >&2; exit 1; }
 warn() { printf "${YELLOW}!!${OFF} %s\n" "$1" >&2; }
 
-RESUME=""; SCRIPT_ONLY=0; TOPIC=""
+RESUME=""; SCRIPT_ONLY=0; TOPIC=""; MODE="run"
 while [ $# -gt 0 ]; do
   case "$1" in
     --resume)      RESUME="${2:-}"; shift 2 ;;
     --script-only) SCRIPT_ONLY=1; shift ;;
     --skip-pull)   SKIP_PULL=1; shift ;;
+    --probe)       MODE="probe"; shift ;;
+    --doctor)      MODE="doctor"; shift ;;
     -h|--help)     sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)             TOPIC="$1"; shift ;;
   esac
 done
-[ -n "$RESUME" ] || [ -n "$TOPIC" ] || die "give me a topic:  ./run.sh \"ATM은 어떻게 지폐를 셀까?\""
+if [ "$MODE" = "run" ]; then
+  [ -n "$RESUME" ] || [ -n "$TOPIC" ] || die "give me a topic:  ./run.sh \"ATM은 어떻게 지폐를 셀까?\""
+fi
 
 # -- 1. latest code ---------------------------------------------------------
 # `git pull` aborting on a dirty tree, and the run continuing anyway against
@@ -58,7 +64,19 @@ if ! $PY -c "import shorts_factory" 2>/dev/null; then
 fi
 ok "python ready"
 
-# -- 3. environment ---------------------------------------------------------
+# -- 3. the modes that stop before the pipeline -----------------------------
+# Both of these run through $PY, which is the venv interpreter. Reaching for a
+# bare `python` is what breaks on Ubuntu, where only python3 exists and only
+# when the venv happens to be active.
+if [ "$MODE" = "probe" ]; then
+  step "one fal call, so a wrong field name costs a clip and not a run"
+  exec $PY scripts/probe_fal.py "$@"
+fi
+if [ "$MODE" = "doctor" ]; then
+  exec $PY scripts/doctor.py
+fi
+
+# -- 4. environment ---------------------------------------------------------
 # Checked before anything is billed, because every one of these has already
 # failed a real run once: a missing key, a stripped ffmpeg, a mock left on.
 step "checking ffmpeg, keys and providers"
@@ -66,7 +84,7 @@ if ! $PY scripts/doctor.py; then
   die "the check above failed. Fix what it names, then run this again."
 fi
 
-# -- 4. the run -------------------------------------------------------------
+# -- 5. the run -------------------------------------------------------------
 if [ -n "$RESUME" ]; then
   step "resuming $RESUME"
   $PY -m shorts_factory resume "$RESUME"; STATUS=$?

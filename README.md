@@ -14,6 +14,30 @@ The runtime is a deterministic pipeline, not an agent swarm. An LLM is used at
 exactly three points — research, writing, directing — and everything it returns
 is validated against a Pydantic schema before the next stage sees it.
 
+
+## Running it
+
+One command, from a cold terminal:
+
+```bash
+./run.sh "ATM은 어떻게 지폐를 셀까?"
+```
+
+It pulls, creates the virtualenv, installs, checks the environment and runs.
+Other modes:
+
+```bash
+./run.sh --probe                    # one cheap fal call to check the API shape
+./run.sh --doctor                   # environment check only
+./run.sh --script-only "<topic>"    # stop before anything is billed
+./run.sh --resume <project>         # continue where a run stopped
+```
+
+Every command below that starts with `.venv/bin/python` is written that way on
+purpose. `python` is not a command on a stock Ubuntu or WSL install -- only
+`python3` is -- and `python3` is not the interpreter this project's
+dependencies are installed into. `run.sh` avoids the question entirely.
+
 ## Quick start
 
 ```bash
@@ -269,7 +293,7 @@ whether Google's API matches is covered by `pytest -m live`.
 ```bash
 pytest                      # unit + mock integration; never touches a paid API
 pytest -m "not media"       # skip the tests that need ffmpeg
-python scripts/smoke_test.py
+.venv/bin/python scripts/smoke_test.py
 
 ALLOW_LIVE_API_TESTS=1 pytest -m live   # opt-in, costs real money
 ```
