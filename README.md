@@ -393,6 +393,79 @@ pytest -m "not media"       # skip the tests that need ffmpeg
 ALLOW_LIVE_API_TESTS=1 pytest -m live   # opt-in, costs real money
 ```
 
+## Setting up on Windows
+
+`run.sh` is bash. Git Bash ships with Git for Windows and runs it unchanged, so
+that is the shorter path; PowerShell needs the underlying commands instead.
+
+Check first whether the machine already has a clone. `C:\Users\<you>\Shorts\Shorts`
+is where an earlier one was found:
+
+```bash
+cd /c/Users/SAMSUNG/Shorts/Shorts && git remote -v
+```
+
+If that prints `diaplus97/Shorts`, skip the clone and just `git pull`.
+
+### Git Bash
+
+```bash
+cd /c/Users/SAMSUNG
+git clone https://github.com/diaplus97/Shorts.git shorts-factory
+cd shorts-factory
+git checkout claude/can-you-build-this-e8v5k5
+
+# A fresh clone has no .env. Copy the whole one across -- it is a single file
+# and the keys in it are the same ones.
+cp /c/Users/SAMSUNG/Shorts/Shorts/.env .env
+
+# Use this instead when a key is missing from an .env you already have. It
+# searches the machine and appends the matching line without opening either
+# file, so the value never reaches a terminal or a shell history.
+# bash scripts/import_key.sh FAL
+
+./run.sh --doctor                   # creates the venv, installs, checks ffmpeg and keys
+./run.sh --probe                    # one fal call
+```
+
+### PowerShell
+
+`run.sh` will not run here; these are the steps it performs.
+
+```powershell
+cd C:\Users\SAMSUNG
+git clone https://github.com/diaplus97/Shorts.git shorts-factory
+cd shorts-factory
+git checkout claude/can-you-build-this-e8v5k5
+
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"
+
+# Copy the .env across yourself: the import script is bash.
+copy C:\Users\SAMSUNG\Shorts\Shorts\.env .env
+
+.venv\Scripts\python scripts\doctor.py
+.venv\Scripts\python scripts\probe_fal.py
+.venv\Scripts\python -m shorts_factory create "ATM은 어떻게 지폐를 셀까?"
+```
+
+### What has to be installed first
+
+- **Python 3.12+** — `winget install Python.Python.3.12`
+- **ffmpeg with libass**, on `PATH` — `winget install Gyan.FFmpeg`, then reopen
+  the terminal. `ffmpeg -filters | findstr subtitles` must print a line, or
+  burned-in subtitles cannot render.
+- **A Korean font.** Windows has Malgun Gothic; set
+  `subtitles.font_name: Malgun Gothic` in `config/settings.local.yaml`, because
+  the default is the Linux `Noto Sans CJK KR`.
+- `config/settings.local.yaml` — copy `config/settings.local.yaml.example` and
+  edit. Without it every provider is a mock and the run produces
+  `mock_preview.mp4` rather than a Short.
+
+`.env` and `config/settings.local.yaml` are both gitignored, so neither comes
+with the clone and neither will ever be committed.
+
+
 ## Requirements
 
 - Python 3.12+
