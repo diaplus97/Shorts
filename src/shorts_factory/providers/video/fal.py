@@ -100,9 +100,15 @@ class FalVideoProvider:
         self.timeout_sec = timeout_sec
         self.download_timeout_sec = download_timeout_sec
         self._client = client
-        #: request_id -> the model that produced it, so status and download
-        #: hit the right endpoint even if the config changes mid-run.
-        self._models: dict[str, str] = {}
+        #: request_id -> the status and result urls fal returned for it.
+        #:
+        #: These are not built from the model path, because fal's queue
+        #: endpoints do not use the model path. Submitting to
+        #: fal-ai/wan/v2.6/image-to-video comes back with a status_url under
+        #: fal-ai/wan -- the base app id, with the version and the task dropped
+        #: -- and asking the full path returns 405 Method Not Allowed forever.
+        #: The response says where to look, so that is where to look.
+        self._jobs: dict[str, dict[str, str]] = {}
 
     # -- duration --------------------------------------------------------
 
@@ -160,14 +166,14 @@ class FalVideoProvider:
                 f"fal accepted the request but returned no request_id: {str(body)[:300]}",
                 provider=self.name,
             )
-        self._models[str(request_id)] = self.model
+        self._jobs[str(request_id)] = {
+            "status": str(body.get("status_url") or ""),
+            "result": str(body.get("response_url") or ""),
+        }
         return str(request_id)
 
     async def status(self, job_id: str) -> VideoJobState:
-        model = self._models.get(job_id, self.model)
-        body = await self._request(
-            "GET", f"{self.base_url}/{model}/requests/{job_id}/status", allow_202=True
-        )
+        body = await self._request("GET", self._url(job_id, "status"), allow_202=True)
         raw = str(body.get("status") or "").upper()
         state = _STATE_MAP.get(raw, "processing")
         error = body.get("error") or body.get("detail")
@@ -180,8 +186,7 @@ class FalVideoProvider:
         )
 
     async def download(self, job_id: str, destination: str | Path) -> VideoResult:
-        model = self._models.get(job_id, self.model)
-        body = await self._request("GET", f"{self.base_url}/{model}/requests/{job_id}")
+        body = await self._request("GET", self._url(job_id, "result"))
 
         url = find_video_url(body)
         if url is None:
@@ -214,7 +219,21 @@ class FalVideoProvider:
             if owns:
                 await client.aclose()
 
-        return VideoResult(path=str(target), model=model, duration_sec=find_duration(body))
+        return VideoResult(path=str(target), model=self.model, duration_sec=find_duration(body))
+
+    def _url(self, job_id: str, kind: str) -> str:
+        """Where to poll or collect one job.
+
+        Prefers the url fal returned at submit time. The fallback exists for a
+        resumed run, where the response is long gone, and uses ``base_app_id``
+        rather than the configured model path for the reason described on
+        ``_jobs``.
+        """
+        recorded = self._jobs.get(job_id, {}).get(kind)
+        if recorded:
+            return recorded
+        base = f"{self.base_url}/{base_app_id(self.model)}/requests/{job_id}"
+        return f"{base}/status" if kind == "status" else base
 
     # -- transport -------------------------------------------------------
 
@@ -269,6 +288,18 @@ class FalVideoProvider:
             raise ProviderError(
                 f"fal returned non-JSON: {response.text[:300]}", provider=self.name
             ) from exc
+
+
+def base_app_id(model: str) -> str:
+    """The owner/app part of a fal model path.
+
+    ``fal-ai/wan/v2.6/image-to-video`` is where a request is *submitted*, but
+    its queue lives under ``fal-ai/wan``. Everything after the second segment is
+    a version and a task, and including it gets 405 Method Not Allowed on every
+    poll -- which reads like a broken job rather than a wrong url.
+    """
+    parts = [part for part in model.strip("/").split("/") if part]
+    return "/".join(parts[:2]) if len(parts) >= 2 else model.strip("/")
 
 
 def data_uri(path: str | Path) -> str:

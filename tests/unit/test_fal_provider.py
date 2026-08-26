@@ -15,6 +15,7 @@ import pytest
 from shorts_factory.errors import ContentBlockedError, ProviderError
 from shorts_factory.providers.video.fal import (
     FalVideoProvider,
+    base_app_id,
     data_uri,
     find_duration,
     find_video_url,
@@ -214,3 +215,59 @@ def test_a_model_with_fixed_lengths_rounds_up() -> None:
 def test_a_model_that_takes_any_length_is_left_alone() -> None:
     """Veo forced this; several models on fal do not, and rounding would overpay."""
     assert FalVideoProvider(model=MODEL).snap_duration(3.3) == 3.3
+
+
+# -- the queue lives somewhere other than the model path --------------------
+
+
+async def test_polling_follows_the_url_fal_returned(tmp_path) -> None:
+    """Submitting to a versioned model path returns a queue url without it.
+
+    Real reply from fal-ai/wan/v2.6/image-to-video:
+
+        "status_url": ".../fal-ai/wan/requests/<id>/status"
+
+    Rebuilding that url from the model path asks
+    .../fal-ai/wan/v2.6/image-to-video/requests/<id>/status, which answers 405
+    Method Not Allowed on every poll -- indistinguishable from a stuck job
+    while the clip has already been paid for.
+    """
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "request_id": "abc",
+                    "status_url": "https://queue.fal.run/fal-ai/wan/requests/abc/status",
+                    "response_url": "https://queue.fal.run/fal-ai/wan/requests/abc",
+                },
+            )
+        return httpx.Response(200, json={"status": "COMPLETED"})
+
+    p = provider(handler)
+    await p.submit(prompt="x", duration_sec=5, aspect_ratio="9:16")
+    await p.status("abc")
+
+    assert seen[-1] == "https://queue.fal.run/fal-ai/wan/requests/abc/status"
+    assert "v2.6" not in seen[-1]
+
+
+async def test_a_resumed_run_falls_back_to_the_base_app_id() -> None:
+    """No submit reply is held after a restart, so the url has to be derived."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "IN_PROGRESS"})
+
+    p = provider(handler)
+    assert p._url("never-submitted", "status") == (
+        "https://queue.fal.run/fal-ai/wan/requests/never-submitted/status"
+    )
+
+
+def test_the_queue_id_drops_the_version_and_the_task() -> None:
+    assert base_app_id("fal-ai/wan/v2.6/image-to-video") == "fal-ai/wan"
+    assert base_app_id("fal-ai/kling-video/v2.6/pro/image-to-video") == "fal-ai/kling-video"
+    assert base_app_id("fal-ai/wan") == "fal-ai/wan"

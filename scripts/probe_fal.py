@@ -24,6 +24,7 @@ import httpx
 from dotenv import load_dotenv
 
 from shorts_factory.providers.base import find_secret
+from shorts_factory.providers.video.fal import base_app_id
 
 BASE_URL = "https://queue.fal.run"
 DEFAULT_MODEL = "fal-ai/wan/v2.6/image-to-video"
@@ -158,18 +159,29 @@ async def main() -> int:
             print(config_lines(model, payload, dropped))
             print()
 
-        request_id = response.json().get("request_id")
+        submitted = response.json()
+        request_id = submitted.get("request_id")
         if not request_id:
             print("  FAIL: no request_id in the reply, so there is nothing to poll.")
             return 1
+
+        # fal's queue does not live under the model path: submitting to
+        # fal-ai/wan/v2.6/image-to-video returns a status_url under fal-ai/wan.
+        # Building the url from the model gets 405 on every poll, which looks
+        # like a stuck job. The reply says where to look.
+        status_url = submitted.get("status_url") or (
+            f"{BASE_URL}/{base_app_id(model)}/requests/{request_id}/status"
+        )
+        result_url = submitted.get("response_url") or (
+            f"{BASE_URL}/{base_app_id(model)}/requests/{request_id}"
+        )
+        print(f"  polling {status_url}\n")
 
         waited = 0.0
         while waited < args.timeout:
             await asyncio.sleep(5.0)
             waited += 5.0
-            status = await client.get(
-                f"{BASE_URL}/{model}/requests/{request_id}/status", headers=headers
-            )
+            status = await client.get(status_url, headers=headers)
             state = ""
             if status.status_code < 400:
                 try:
@@ -183,7 +195,7 @@ async def main() -> int:
             print(f"\n  still running after {args.timeout:.0f}s; not an error, just slow.")
             return 0
 
-        result = await client.get(f"{BASE_URL}/{model}/requests/{request_id}", headers=headers)
+        result = await client.get(result_url, headers=headers)
         print(f"\n  result  HTTP {result.status_code}")
         print(f"          {result.text[:1200]}\n")
 
