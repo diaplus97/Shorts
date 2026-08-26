@@ -170,3 +170,29 @@ def test_an_alias_value_is_redacted_from_a_log_line(monkeypatch) -> None:
     monkeypatch.setenv("FAL_API_KEY", "fal-secret-value-1234")
     out = redact_secrets(None, "info", {"event": "x", "url": "https://q/?k=fal-secret-value-1234"})
     assert "fal-secret-value-1234" not in str(out)
+
+
+def test_no_script_reads_a_secret_straight_from_the_environment() -> None:
+    """Aliases only help if everything resolves secrets the same way.
+
+    ``require_secret`` accepts FAL_API_KEY for FAL_KEY, but probe_fal.py read
+    os.environ["FAL_KEY"] directly, so it reported the key missing -- while
+    printing "did you mean FAL_API_KEY?" about a key that was present and would
+    have worked in a real run. Three scripts had the same bug. A lookup that
+    bypasses find_secret disagrees with the pipeline about what is configured.
+    """
+    import re
+
+    root = Path(__file__).resolve().parents[2]
+    pattern = re.compile(r"""environ(?:\.get\(|\[)['"]([A-Z_]*(?:KEY|SECRET|TOKEN))['"]""")
+
+    offenders: list[str] = []
+    for path in [*(root / "scripts").glob("*.py"), *(root / "src").rglob("*.py")]:
+        # base.py is where find_secret is implemented; it has to read os.environ.
+        if path.name == "base.py" and path.parent.name == "providers":
+            continue
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line):
+                offenders.append(f"{path.relative_to(root)}:{line_no}: {line.strip()}")
+
+    assert not offenders, "these read a secret without alias resolution:\n" + "\n".join(offenders)

@@ -18,11 +18,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 
 import httpx
 from dotenv import load_dotenv
+
+from shorts_factory.providers.base import find_secret
 
 BASE_URL = "https://queue.fal.run"
 DEFAULT_MODEL = "fal-ai/wan/v2.6/image-to-video"
@@ -109,19 +110,23 @@ def config_lines(model: str, payload: dict, dropped: list[str]) -> str:
 async def main() -> int:
     args = parse_args()
     load_dotenv(override=False)
-    key = os.environ.get("FAL_KEY")
-    if not key:
-        # "FAL_KEY is not set" on its own is true and useless. Which .env was
-        # read, and what is actually in it, is the part that answers the
-        # question -- usually that the key is there under another name, or that
-        # only the keys needed at the time ever got copied into this project.
+    # find_secret, not os.environ, so the aliases the providers accept are the
+    # same ones this accepts. Reading the canonical name directly is how this
+    # ended up reporting that FAL_KEY was missing while printing "did you mean
+    # FAL_API_KEY?" about a key that was sitting right there and would have
+    # worked in a real run.
+    found = find_secret("FAL_KEY")
+    if found is None:
         from shorts_factory.scripts_doctor import _suggest_similar
 
-        print("FAIL: FAL_KEY is not set.")
+        print("FAIL: no fal key found.")
         _suggest_similar("FAL_KEY")
-        print("\n  To copy it across from another .env without printing it:")
-        print("    grep -h '^FAL' /path/to/other/.env >> ~/Shorts/.env")
+        print("\n  To copy it in from another .env on this machine:")
+        print("    ./run.sh --find-key")
         return 1
+    key_name, key = found
+    if key_name != "FAL_KEY":
+        print(f"  using {key_name}")
 
     model = args.model.strip("/")
     headers = {"Authorization": f"Key {key}"}

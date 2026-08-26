@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import sys
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
+
+from shorts_factory.providers.base import find_secret
 
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -79,7 +80,8 @@ async def fetch_models(base_url: str, api_key: str) -> list[dict]:
 async def main() -> int:
     args = parse_args()
     load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
-    api_key = os.environ.get("VIDEO_API_KEY")
+    found = find_secret("VIDEO_API_KEY")
+    api_key = found[1] if found else None
     if not api_key:
         print("FAIL: VIDEO_API_KEY is not set. Put your Gemini key in .env")
         return 1

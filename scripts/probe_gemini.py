@@ -25,6 +25,8 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
+from shorts_factory.providers.base import find_secret
+
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
@@ -110,7 +112,8 @@ async def main() -> int:
 
     failures = 0
     for label, env_name, model, payload in checks:
-        api_key = os.environ.get(env_name)
+        found = find_secret(env_name)
+        api_key = found[1] if found else None
         if not api_key:
             print(f"\n=== {label} ===\n  SKIP — {env_name} is not set in .env")
             failures += 1
