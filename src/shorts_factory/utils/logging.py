@@ -21,6 +21,9 @@ import structlog
 from .files import ensure_dir
 
 _SECRET_KEY_PATTERN = re.compile(r"(key|token|secret|password|authorization)", re.IGNORECASE)
+#: Every variable whose value must never reach a log. Aliases belong here as
+#: much as canonical names: a key is just as secret under the name someone
+#: happened to write it under, and providers accept several.
 _SECRET_ENV_NAMES = (
     "OPENAI_API_KEY",
     "LLM_API_KEY",
@@ -28,6 +31,11 @@ _SECRET_ENV_NAMES = (
     "IMAGE_API_KEY",
     "VIDEO_API_KEY",
     "TTS_API_KEY",
+    "FAL_KEY",
+    "FAL_API_KEY",
+    "FAL_AI_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
 )
 _REDACTED = "***redacted***"
 

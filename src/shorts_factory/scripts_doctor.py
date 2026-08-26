@@ -12,6 +12,7 @@ from .config import AppConfig, active_local_overrides, load_config
 from .errors import ConfigError
 from .media import ffmpeg
 from .prompts import PROMPT_VERSIONS, load_prompt
+from .providers.base import find_secret
 
 #: Lowest interpreter this package supports; mirrors requires-python.
 MINIMUM_PYTHON = (3, 12)
@@ -124,8 +125,10 @@ def check_providers(config: AppConfig | None) -> bool:
             _ok(f"{kind}: mock (no credentials needed)")
         elif secret_name is None:
             healthy = _bad(f"{kind}: '{provider}' has no implementation registered") and healthy
-        elif os.environ.get(secret_name):
-            _ok(f"{kind}: {provider} ({secret_name} is set)")
+        elif (found := find_secret(secret_name)) is not None:
+            name, _ = found
+            label = name if name == secret_name else f"{name}, accepted for {secret_name}"
+            _ok(f"{kind}: {provider} ({label} is set)")
         else:
             healthy = _bad(f"{kind}: {provider} needs {secret_name}; add it to .env") and healthy
             _suggest_similar(secret_name)

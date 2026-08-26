@@ -272,11 +272,44 @@ def assert_live_calls_allowed(provider: str) -> None:
         )
 
 
+#: Other names the same secret is commonly stored under. Vendors are not
+#: consistent about this and neither is anyone's .env: fal's own docs and SDK
+#: use FAL_KEY, while most people write FAL_API_KEY because every other key in
+#: the file ends that way. Accepting both costs one dict entry and saves the
+#: user editing a file to rename something that was already correct.
+SECRET_ALIASES: dict[str, tuple[str, ...]] = {
+    "FAL_KEY": ("FAL_API_KEY", "FAL_AI_KEY"),
+    "VIDEO_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "LLM_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "IMAGE_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "SEARCH_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "TTS_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+}
+
+
+def secret_names(env_name: str) -> tuple[str, ...]:
+    """Every variable name that satisfies one secret, preferred name first."""
+    return (env_name, *SECRET_ALIASES.get(env_name, ()))
+
+
+def find_secret(env_name: str) -> tuple[str, str] | None:
+    """The first name that is set, and its value."""
+    for name in secret_names(env_name):
+        value = os.environ.get(name)
+        if value:
+            return name, value
+    return None
+
+
 def require_secret(env_name: str, provider: str) -> str:
-    value = os.environ.get(env_name)
-    if not value:
+    found = find_secret(env_name)
+    if found is None:
+        accepted = " or ".join(secret_names(env_name))
         raise ProviderError(
-            f"{provider} requires {env_name}; add it to .env (see .env.example)",
+            f"{provider} requires {accepted}; add one to .env (see .env.example)",
             provider=provider,
         )
+    name, value = found
+    if name != env_name:
+        log.debug("secret_alias_used", wanted=env_name, found=name, provider=provider)
     return value

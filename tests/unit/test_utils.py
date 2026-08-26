@@ -144,3 +144,29 @@ def test_env_is_not_leaked_by_slugify() -> None:
         assert "sk-should-not-appear" not in slugify("topic")
     finally:
         del os.environ["OPENAI_API_KEY"]
+
+
+def test_every_accepted_secret_name_is_also_redacted() -> None:
+    """An alias is exactly as secret as the canonical name.
+
+    Accepting FAL_API_KEY as well as FAL_KEY is a convenience; leaving the
+    alias out of the redaction list would make it a way to get a live key into
+    a log file. The two lists have to be added to together, so this fails if
+    only one of them is.
+    """
+    from shorts_factory.providers.base import SECRET_ALIASES, secret_names
+    from shorts_factory.utils.logging import _SECRET_ENV_NAMES
+
+    accepted = {name for canonical in SECRET_ALIASES for name in secret_names(canonical)}
+    assert accepted <= set(_SECRET_ENV_NAMES), (
+        f"these names satisfy a provider but are never redacted: "
+        f"{sorted(accepted - set(_SECRET_ENV_NAMES))}"
+    )
+
+
+def test_an_alias_value_is_redacted_from_a_log_line(monkeypatch) -> None:
+    from shorts_factory.utils.logging import redact_secrets
+
+    monkeypatch.setenv("FAL_API_KEY", "fal-secret-value-1234")
+    out = redact_secrets(None, "info", {"event": "x", "url": "https://q/?k=fal-secret-value-1234"})
+    assert "fal-secret-value-1234" not in str(out)
