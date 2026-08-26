@@ -39,8 +39,14 @@ and keep the sentence if it is carrying the explanation.
 
 ## A beat is a movement, not a sentence
 
-Each beat is **two or three sentences, around 60-90 characters**, and it
-finishes what it starts. Never split one sentence across two beats.
+Each beat is **two or three sentences**, and it finishes what it starts.
+Never split one sentence across two beats.
+
+Work out the size from the budget you were given rather than guessing:
+**MAX_CHARS divided by the number of beats.** At the usual budget that is
+around 55-70 characters a beat. Writing more beats does not give you more
+room; it only makes each one smaller, and small beats are the failure this
+rule exists to prevent.
 
 The reference Short is seven paragraphs. A script of twenty one-line beats is a
 parts list, and a viewer remembers nothing from it. Given the choice between
@@ -176,6 +182,9 @@ Beat purposes, in this order:
     surprise   what follows that the viewer would not have guessed
     closing    the reframe someone could repeat to a friend
 
-`transition` may sit anywhere. Eight to twelve beats in total.
+`transition` may sit anywhere.
+
+**Six to eight beats in total.** The reference Short is seven. More than eight
+does not fit the character budget without shrinking every beat into a fragment.
 
 Return JSON only. No prose, no markdown fences.
