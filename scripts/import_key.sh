@@ -57,8 +57,12 @@ if [ "${#FOUND[@]}" -gt 1 ]; then
 fi
 
 SOURCE="${FOUND[0]}"
-BEFORE="$(grep -cE "^[A-Za-z_]*${PATTERN}" "$TARGET" 2>/dev/null || echo 0)"
-if [ "$BEFORE" -gt 0 ]; then
+# `grep -c` prints 0 *and* exits 1 when nothing matches, so a `|| echo 0`
+# fallback appends a second zero and the test then compares the string "0\n0"
+# against an integer. It fails loudly, the branch is skipped, and a duplicate
+# entry gets appended to a file that already had one. `grep -q` has no count to
+# get wrong.
+if grep -qE "^[A-Za-z_]*${PATTERN}[A-Za-z_0-9]*=" "$TARGET" 2>/dev/null; then
   printf "${YELLOW}!!${OFF}    %s already has a %s entry; not adding a second one.\n" \
     "$TARGET" "$PATTERN"
   exit 0
