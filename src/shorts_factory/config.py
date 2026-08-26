@@ -161,7 +161,9 @@ class ScriptSettings(BaseModel):
 
     target_duration_sec: float = 58.0
     min_duration_sec: float = 45.0
-    max_duration_sec: float = 70.0
+    #: The reference Short runs about 77s; a 70s ceiling cannot hold the
+    #: shape it is the model for.
+    max_duration_sec: float = 85.0
     chars_per_sec: float = 6.2
     pause_budget_sec: float = 6.0
 
@@ -327,6 +329,12 @@ class ScriptContract(BaseModel):
     # -- structure ---------------------------------------------------------
     #: The beat sequence must move forward through the arc, not merely contain it.
     arc_order_required: bool = True
+    #: A beat is a movement of two or three sentences. The reference Short
+    #: averages 87 characters a paragraph; the first real output here averaged
+    #: 17 and read as a parts list.
+    min_beat_chars: int = 45
+    #: Nobody holds thirteen steps, which is what the first real output had.
+    max_process_beats: int = 5
 
     # -- language ----------------------------------------------------------
     min_hangul_ratio: float = 0.8

@@ -123,7 +123,12 @@ class MockLLMProvider:
             id(step): claims[index]["id"] for index, step in enumerate(steps) if index < len(claims)
         }
 
-        head = [_beat("hook", hook, None, None)]
+        head = [
+            _beat("hook", hook, None, None),
+            # Required by the arc: without "here is the obvious answer and why
+            # it fails", every step after it is an answer to nothing.
+            _beat("problem", None, scenario.problem, claim_for.get(id(scenario.problem))),
+        ]
         tail = [
             _beat("surprise", None, scenario.surprise, claim_for.get(id(scenario.surprise))),
             _beat("closing", None, scenario.closing, claim_for.get(id(scenario.closing))),

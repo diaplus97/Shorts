@@ -30,7 +30,7 @@ DEFAULT_PROMPT_DIR = _default_prompt_dir()
 #: Bumped by hand whenever a prompt's contract changes in a breaking way.
 PROMPT_VERSIONS: dict[str, str] = {
     "research": "research-v2",
-    "writer": "writer-v3",
+    "writer": "writer-v4",
     "director": "director-v2",
     "qa": "qa-v1",
 }

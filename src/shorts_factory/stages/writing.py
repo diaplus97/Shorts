@@ -12,6 +12,7 @@ from ..pipeline.context import RunContext
 from ..quality import (
     QAIssue,
     check_beat_arc,
+    check_beat_size,
     check_causal_linkage,
     check_korean_register,
     check_script,
@@ -98,6 +99,7 @@ async def run(context: RunContext) -> ScriptResult:
             # a scrambled arc or a narration made of pronouns is worth spending
             # the retry on, because neither is recoverable downstream.
             *check_beat_arc(result, contract),
+            *check_beat_size(result, contract),
             *check_causal_linkage(result, contract),
             *check_korean_register(result, contract),
         ]

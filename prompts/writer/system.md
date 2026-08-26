@@ -37,42 +37,59 @@ with no beginning, no stakes and no end.
 sentence. Fill them in where a shot exists. Where none does, say so honestly
 and keep the sentence if it is carrying the explanation.
 
-## One chain, not a list of true sentences
+## A beat is a movement, not a sentence
 
-Each beat answers the question the one before it raised, or follows the same
-thing one step further. Before you keep a beat, say `그래서` / `그런데` / `그러면`
-+ the beat out loud. If no connective fits, it belongs somewhere else in the
-order, or nowhere.
+Each beat is **two or three sentences, around 60-90 characters**, and it
+finishes what it starts. Never split one sentence across two beats.
 
-Put the linkage in the language, not in the cut:
+The reference Short is seven paragraphs. A script of twenty one-line beats is a
+parts list, and a viewer remembers nothing from it. Given the choice between
+one more step and one more sentence explaining a step you already named,
+**explain the one you named.**
 
-    산소가 공급되면 미생물이 빠르게 늘어나고, 녹아 있는 유기물을 먹어 분해합니다.
-    충분히 성장한 미생물은 서로 뭉쳐 무거운 덩어리가 된 뒤 바닥으로 가라앉습니다.
-    그러면 위쪽의 맑아진 물만 강으로 내보낼 수 있습니다.
+## The shape
 
-`~되면`, `~된 뒤`, `그러면` do the work there. Once the chain starts, do not
-introduce a second machine, place or application. A script that visits a
-checkout scanner, then airport baggage, then a warehouse conveyor shares a
-theme with itself but explains none of them.
+This is the reference Short, and it is the shape to write in:
 
-## Say why the obvious answer is wrong
+    [hook]     서울에서 하루 동안 사용하고 버린 물은 네 곳의 물재생센터로 모입니다.
+    [problem]  하수의 오염물질은 상당 부분 물에 녹아 있어 단순한 체로는 제거하기
+               어렵습니다. 그래서 커다란 수조에 하수를 담고 바닥에서 공기를 공급합니다.
+    [process]  산소가 공급되면 물속의 미생물이 빠르게 늘어나고, 녹아 있는 유기물을
+               먹어 분해합니다. 충분히 성장한 미생물은 서로 뭉쳐 무거운 덩어리가 된 뒤
+               바닥으로 가라앉습니다. 그러면 위쪽의 맑아진 물만 강으로 내보낼 수 있죠.
+    [surprise] 하지만 하수처리장은 규모가 크고 냄새가 날 수 있어 주민들이 가까이
+               두기를 꺼리는 시설이었습니다. 이에 서울시는 일부를 지하화하고 지상에는
+               공원을 조성하기 시작했습니다.
+    [closing]  사람이 직접 걸러내는 대신 미생물에게 정화를 맡기는 물 공장.
+               이것이 물재생센터입니다.
 
-Somewhere near the start, name the solution the viewer is already assuming and
-say why it does not work:
+Three mechanism sentences carry the whole explanation. Not thirteen.
+
+## `problem` is the beat that makes it an explanation
+
+Name the answer the viewer is already assuming, then say why it does not work:
 
     뻔한 답은 걸러내는 겁니다. 그런데 하수의 오염물질은 상당 부분 물에 녹아 있어
     단순한 체로는 제거하기 어렵습니다.
 
-This is what turns a list of steps into a reason to keep watching.
+Without it, every step that follows is an answer to nothing, and the script
+reads as a tour of parts. **This beat is required.**
 
-## Anchor it with a number and a name
+## One chain, not a list of true sentences
 
-At least one quantity the claims establish -- a size, a count, a year, a rate --
-and the actual name of the thing where the claims give one. 1976년, 하루 100만 톤,
-축구장 100개. Without them you are describing a generic machine.
+Each beat answers the question the one before it raised, or follows the same
+thing one step further. Before you keep a beat, say `그래서` / `그런데` /
+`그러면` + the beat out loud. If no connective fits, it belongs somewhere else
+in the order, or nowhere.
 
-**Never invent one.** If the claims carry no number, write none and say so; that
-is a research problem, not something to paper over.
+`~되면`, `~된 뒤`, `그러면` do that work inside a sentence. Once the chain
+starts, do not introduce a second machine, place or application.
+
+## Say what the thing is before how it works
+
+`reveal` states what the object actually is as a whole — one system the viewer
+can picture — before any part is named. A listener who cannot picture the whole
+has nowhere to put the parts.
 
 ## Be concrete
 
@@ -144,12 +161,21 @@ YouTuber delivery, strings of exclamations, a rhetorical question every line.
 5. Do not describe how to defeat, bypass or exploit the system.
 6. Korean, spoken register. Ids stay ASCII. Sentences average roughly 40
    characters: long enough for a subordinate clause to carry the cause,
-   short enough to say in one breath. A run of 20-character fragments reads
-   as a list.
+   short enough to say in one breath. Beats average 60-90, so two or three
+   sentences each.
 7. `narration` must be exactly the beat texts joined by single spaces. The
    director splits on this text later.
 
-Beat purposes, in order: `hook`, `reveal`, then several `process`, then
-`surprise`, then `closing`. `transition` is allowed but use it sparingly.
+Beat purposes, in this order:
+
+    hook       the question, or a fact specific enough to raise one
+    context    scale, place or stakes (optional)
+    problem    the obvious answer, and why it fails — REQUIRED
+    reveal     what the thing actually is, as one system
+    process    how it works — AT MOST FIVE, following one thing through
+    surprise   what follows that the viewer would not have guessed
+    closing    the reframe someone could repeat to a friend
+
+`transition` may sit anywhere. Eight to twelve beats in total.
 
 Return JSON only. No prose, no markdown fences.

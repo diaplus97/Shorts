@@ -112,9 +112,13 @@ tts:
   sample_rate: 24000
 
 script:
-  target_duration_sec: 58
+  # The reference Short in tests/fixtures/benchmark/ is 476 characters, about
+  # 77 seconds. A 70s ceiling cannot hold the shape it is the model for, and
+  # the first real run was refused at 76.4s for exceeding a limit that was
+  # itself wrong.
+  target_duration_sec: 70
   min_duration_sec: 45
-  max_duration_sec: 70
+  max_duration_sec: 85
   # Rough speaking rate used for duration estimation before TTS exists.
   # Korean narration, measured in characters per second.
   chars_per_sec: 6.2

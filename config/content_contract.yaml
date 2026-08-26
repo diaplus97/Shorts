@@ -49,6 +49,13 @@ script:
   # The arc is a sequence, not a set. hook -> reveal -> process -> surprise ->
   # closing, moving forward only. Checked in quality/script_arc.py.
   arc_order_required: true
+  # A beat is a movement, not a sentence. The reference Short is 7 paragraphs
+  # averaging 87 characters; the first real output was 20 beats averaging 17,
+  # half of which did not even finish a sentence. At that size the arc labels
+  # mean nothing and the result is a parts list.
+  min_beat_chars: 45
+  # The same output had 13 consecutive process beats. Nobody holds 13 steps.
+  max_process_beats: 5
   # NOTE: "follow one machine rather than touring several" is a real requirement
   # and it is NOT checked here. Subject extraction does not work in a pro-drop
   # language, and lexical overlap does not separate good scripts from bad ones

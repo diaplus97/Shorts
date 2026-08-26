@@ -28,12 +28,35 @@ class ScenePriority(StrEnum):
 
 
 class BeatPurpose(StrEnum):
-    """Where a narration beat sits in the 45-70s arc (spec v0.2 section 14)."""
+    """One movement of the explanation, not one sentence of it.
 
+    The first taxonomy here was hook / reveal / process* / surprise / closing.
+    Applied to a real topic it produced thirteen consecutive `process` beats of
+    seventeen characters each -- a parts list, not an explanation -- and not one
+    of the twenty beats said *why* anything was the way it was. The owner's
+    verdict was that asking an LLM the bare question outright would have
+    explained it better, which was true.
+
+    So CONTEXT and PROBLEM exist because the reference Short has them and the
+    old taxonomy had nowhere to put them. PROBLEM is the load-bearing one: it
+    names the answer the viewer is already assuming and says why it does not
+    work, which is what turns a sequence of steps into a reason to keep
+    watching.
+    """
+
+    #: The question, or a fact specific enough to raise one.
     HOOK = "hook"
+    #: Scale, place, or stakes. Where this sits in the world.
+    CONTEXT = "context"
+    #: The obvious answer, and why it fails. Without this it is a list.
+    PROBLEM = "problem"
+    #: What the thing actually is, before how it works.
     REVEAL = "reveal"
+    #: How it works, following one thing through. Few and full, not many and thin.
     PROCESS = "process"
+    #: What follows from the mechanism that the viewer would not have guessed.
     SURPRISE = "surprise"
+    #: The reframe that survives being repeated to someone else.
     CLOSING = "closing"
     TRANSITION = "transition"
 

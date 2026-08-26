@@ -27,6 +27,7 @@ from .report import QAIssue, QAReport, error, warning
 from .scene_check import check_assets, check_scene_plan, check_script
 from .script_arc import (
     check_beat_arc,
+    check_beat_size,
     check_causal_linkage,
 )
 from .speech_contract import (
@@ -49,6 +50,7 @@ __all__ = [
     "assess",
     "check_assets",
     "check_beat_arc",
+    "check_beat_size",
     "check_causal_linkage",
     "check_clip",
     "check_concrete_mechanism",

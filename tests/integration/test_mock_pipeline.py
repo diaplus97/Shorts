@@ -268,7 +268,14 @@ async def test_full_pipeline_produces_a_valid_short(context) -> None:
     assert info.has_video and info.has_audio
     assert info.video_codec == "h264"
     assert info.audio_codec == "aac"
-    assert 45.0 <= info.duration_sec <= 70.0
+    # Read the window from config rather than restating it: it moved once
+    # already, when the reference Short turned out to run about 77 seconds and
+    # the 70s ceiling was refusing output for exceeding a wrong limit. The
+    # composed video carries tail padding on top of the narration.
+    script_settings = context.config.settings.script
+    padding = context.config.settings.output.tail_padding_sec
+    assert script_settings.min_duration_sec <= info.duration_sec
+    assert info.duration_sec <= script_settings.max_duration_sec + padding
 
     assert context.workspace.narration_srt.exists()
     assert context.workspace.speech_json.exists()

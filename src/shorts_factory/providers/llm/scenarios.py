@@ -53,6 +53,9 @@ class Scenario:
     excluded: tuple[str, ...]
     summary: str
     hook: str
+    #: The obvious answer, and why it fails. Required by the arc: without it
+    #: every step that follows is an answer to nothing.
+    problem: Step
     reveal: Step
     steps: tuple[Step, ...]
     surprise: Step
@@ -63,7 +66,9 @@ class Scenario:
     continuity: tuple[tuple[str, str], ...] = field(default=())
 
     def all_steps(self) -> tuple[Step, ...]:
-        return (self.reveal, *self.steps, self.surprise, self.closing)
+        # In arc order, so research emits one claim per beat and the mock
+        # writer can map them back by index.
+        return (self.problem, self.reveal, *self.steps, self.surprise, self.closing)
 
     def spoken_lines(self) -> list[str]:
         return [step.spoken or step.statement for step in self.all_steps()]
@@ -92,121 +97,128 @@ ATM = Scenario(
         "확인을 마친 지폐만 금액별 카세트에 쌓입니다."
     ),
     hook="ATM은 지폐를 어떻게 한 장씩 셀까요?",
+    problem=Step(
+        statement="지폐 뭉치는 서로 붙어 있어 세는 것만으로는 낱장을 구분할 수 없다.",
+        spoken=(
+            "뻔한 답은 그냥 세는 겁니다. 그런데 지폐는 서로 달라붙어 있어서, "
+            "뭉치 그대로는 몇 장인지 알 수가 없죠."
+        ),
+        sfx_cue="none",
+        visual_payoff="지폐 뭉치가 서로 붙은 채 그대로 놓여 있다",
+        caption="뭉치로는 셀 수 없다",
+        key_object="a stack of banknotes stuck together",
+        mechanism="the notes cling to each other and cannot be told apart",
+        visible_change="a loose stack → the same stack, still inseparable",
+        camera_path="slow push-in on the edge of the stack",
+        visual_subject="a stack of banknotes seen edge on",
+        action="the stack sits unmoved, its edges indistinguishable",
+        continuity_ids=("NOTE_HERO",),
+    ),
     reveal=Step(
-        statement="입금구 안쪽에는 지폐를 한 장씩 떼어내는 롤러와 이송로가 이어져 있다.",
-        spoken="지폐를 넣으면 안에서는 바로 확인이 시작됩니다. 그런데 뭉치 그대로는 셀 수 없죠.",
+        statement="입금구 안쪽은 롤러와 벨트가 이어진 하나의 이송로다.",
+        spoken=(
+            "그래서 입금구 안쪽은 통로 하나로 이어져 있습니다. "
+            "롤러와 벨트, 센서가 한 줄로 놓인 길이고, 지폐는 이 길을 처음부터 끝까지 지나갑니다."
+        ),
         sfx_cue="mechanical_reveal",
-        visual_payoff="ATM 외장이 단면으로 열리고 입금구부터 이어진 이송로가 드러난다",
-        caption="입금구 안쪽이 열린다",
-        key_object="ATM deposit slot and the transport path behind it",
-        mechanism="the machine casing opens into a sectional view of the note path",
-        visible_change="closed ATM front panel → sectional cutaway exposing the deposit path",
-        camera_path="push in on the deposit slot, then the casing peels away into a cutaway",
-        visual_subject="cutaway of an ATM deposit slot and transport path",
-        action="the front casing dissolves into a clean sectional view",
+        visual_payoff="입금구가 단면으로 열리고 롤러와 벨트가 이어진 통로가 드러난다",
+        caption="하나로 이어진 길",
+        key_object="the deposit slot opening into a single transport path",
+        mechanism="the casing peels away to show rollers and belts in one line",
+        visible_change="closed deposit slot → sectional view of the whole path",
+        camera_path="push in on the slot, then the casing peels away",
+        visual_subject="cutaway of the ATM deposit transport path",
+        action="the outer panel dissolves into a clean sectional view",
         continuity_ids=("ATM_MAIN",),
     ),
     steps=(
         Step(
-            statement="입금구에 들어간 지폐 뭉치는 고무 롤러가 맨 앞장부터 한 장씩 떼어낸다.",
+            statement="고무 롤러가 맨 앞 지폐 한 장만 마찰로 끌어당겨 분리한다.",
             spoken=(
-                "그래서 가장 먼저 하는 일이 한 장씩 나누는 겁니다. "
-                "고무 롤러가 맨 앞 지폐만 살짝 끌어당깁니다."
+                "그래서 기계가 가장 먼저 하는 일은 한 장씩 떼어내는 겁니다. "
+                "고무 롤러가 맨 앞 지폐만 살짝 끌어당기고, 반대로 도는 롤러가 "
+                "뒤따라온 두 번째 장을 붙잡아 되밀어 냅니다."
             ),
+            sfx_cue="transport_roller",
+            visual_payoff="롤러가 맨 앞 지폐만 끌어당기고 두 번째 장은 밀려 되돌아간다",
+            caption="한 장씩 떼어낸다",
+            key_object="rubber feed roller separating one banknote from a stack",
+            mechanism="a feed roller grips the front note while a reverse roller holds the next",
+            visible_change="stack at rest → one note peeled off, the next pushed back",
+            camera_path="macro tracking shot alongside the roller",
+            visual_subject="rubber feed roller and the leading banknote",
+            action="one note slides ahead while the second is pushed back",
             emphasis="한 장씩",
-            sfx_cue="transport_roller",
-            visual_payoff="지폐 뭉치 앞면에서 고무 롤러가 돌며 맨 앞 지폐 한 장만 밀려 나간다",
-            caption="롤러가 한 장씩 떼어낸다",
-            key_object="a single banknote at the front of the stack",
-            mechanism="a rubber feed roller grips the front note and pushes it forward alone",
-            visible_change="stack of notes at rest → one note peeled off and moving inward",
-            camera_path="macro tracking shot alongside the roller, following the leading note",
-            visual_subject="rubber feed roller separating one banknote from a stack",
-            action="the roller turns and one note slides ahead of the others",
-            continuity_ids=("NOTE_HERO",),
+            continuity_ids=("NOTE_HERO", "ATM_MAIN"),
         ),
         Step(
-            statement="떨어져 나온 지폐는 좁은 이송로를 따라 벨트와 롤러 사이에 물려 이동한다.",
-            spoken="떨어져 나온 한 장은 벨트에 물려 안쪽으로 들어가는데요.",
-            sfx_cue="transport_roller",
-            visual_payoff="한 장이 된 지폐가 벨트 사이에 물려 좁은 통로를 따라 미끄러진다",
-            caption="벨트가 지폐를 실어 나른다",
-            key_object="the separated banknote",
-            mechanism="paired belts pinch the note and carry it along a narrow channel",
-            visible_change="note at the roller exit → note gliding deep into the channel",
-            camera_path="continuous tracking shot travelling with the note down the channel",
-            visual_subject="a banknote pinched between two transport belts",
-            action="the note slides through the narrow transport channel",
-            continuity_ids=("NOTE_HERO",),
-        ),
-        Step(
-            statement="이송로의 광학 센서는 지폐가 지나가는 동안 무늬와 크기를 읽는다.",
-            spoken="이동하는 동안 센서 앞을 지나갑니다. 여기서 무늬와 크기를 읽습니다.",
-            emphasis="무늬와 크기",
+            statement="분리된 지폐는 벨트에 물려 센서 구간을 지나며 무늬와 크기가 확인된다.",
+            spoken=(
+                "떨어져 나온 한 장은 벨트에 물려 안쪽으로 들어갑니다. "
+                "이동하는 동안 센서 앞을 지나가는데, 여기서 무늬와 크기를 읽어 "
+                "진짜 지폐가 맞는지 확인합니다."
+            ),
             sfx_cue="sensor_scan",
-            visual_payoff="지폐가 센서 구멍을 지나며 표면이 위아래에서 훑린다",
-            caption="센서가 무늬를 읽는다",
-            key_object="the banknote passing the optical sensor window",
-            mechanism="an optical sensor scans the note surface as it travels past",
-            visible_change="note approaching the sensor window → note fully swept past it",
-            camera_path="macro push-in on the sensor window as the note crosses it",
-            visual_subject="optical sensor window reading a banknote in motion",
-            action="the note crosses the sensor gap without stopping",
-            continuity_ids=("NOTE_HERO",),
+            visual_payoff="지폐가 벨트에 물려 센서 창을 통과한다",
+            caption="센서가 읽는다",
+            key_object="a banknote passing an optical sensor window",
+            mechanism="belts carry the note past a sensor that reads pattern and size",
+            visible_change="note entering the channel → note fully swept past the sensor",
+            camera_path="tracking shot following the note through the channel",
+            visual_subject="a single banknote on the transport belt",
+            action="the note travels past the sensor window",
+            continuity_ids=("NOTE_HERO", "ATM_MAIN"),
         ),
         Step(
-            statement="두께를 재는 센서는 두 장이 겹쳐 들어왔는지 함께 확인한다.",
-            spoken="두께를 재는 곳도 있습니다. 두 장이 겹쳐 들어왔는지 확인하는 곳이죠.",
-            emphasis="겹쳐",
+            statement="두께 측정으로 두 장이 겹쳐 들어온 경우를 걸러낸다.",
+            spoken=(
+                "같은 구간에서 두께도 함께 잽니다. 한 장보다 두꺼우면 "
+                "두 장이 겹쳐 들어왔다는 뜻이라, 금액이 어긋나기 전에 여기서 잡아냅니다."
+            ),
             sfx_cue="sensor_scan",
-            visual_payoff="지폐가 두 개의 작은 바퀴 사이를 지나며 눌리고, 겹친 지폐가 걸린다",
-            caption="겹친 지폐를 잡아낸다",
-            key_object="the thickness-sensing wheels",
-            mechanism="two rollers measure the gap the note opens between them",
-            visible_change="single note passing cleanly → doubled note forcing the gap wider",
-            camera_path="tight macro on the wheel gap, holding as the note passes",
-            visual_subject="thickness sensing rollers pressing a banknote",
-            action="the roller gap widens as a doubled note passes",
+            visual_payoff="두께 감지 롤러가 지폐 한 장 두께만큼만 밀린다",
+            caption="두께로 겹침을 잡는다",
+            key_object="a thickness-sensing roller pressed by the passing note",
+            mechanism="a sprung roller measures how far the note pushes it",
+            visible_change="roller at rest → roller lifted by exactly one note",
+            camera_path="macro push-in on the sensing roller",
+            visual_subject="thickness-sensing roller and the note beneath it",
+            action="the roller lifts as the note passes",
+            continuity_ids=("NOTE_HERO", "ATM_MAIN"),
         ),
         Step(
-            statement="읽히지 않거나 겹쳐 들어온 지폐는 갈림길에서 되돌림 상자로 빠진다.",
-            spoken="그럼 문제가 있는 지폐는 어떻게 될까요? 갈림길에서 따로 빠져나갑니다.",
+            statement="기준에 맞지 않는 지폐는 갈림길에서 별도 통로로 빠진다.",
+            spoken=(
+                "그럼 문제가 있는 지폐는 어떻게 될까요? 갈림길의 판이 젖혀지면서 "
+                "그 한 장만 옆 통로로 빠져나갑니다. 나머지는 가던 길을 그대로 갑니다."
+            ),
             sfx_cue="reject_click",
-            visual_payoff="이송로 갈림길에서 판이 젖혀지고 지폐 한 장이 옆 통로로 빠진다",
-            caption="걸러진 지폐는 옆길로",
-            key_object="the diverter gate at the fork in the path",
-            mechanism="a hinged gate swings to send a rejected note down a side channel",
-            visible_change="gate closed and note heading straight → gate open and note diverted",
-            camera_path="tracking shot that follows the rejected note into the side channel",
-            visual_subject="a hinged diverter gate splitting the note path in two",
-            action="the gate swings and one note peels away from the main path",
+            visual_payoff="갈림길 판이 젖혀지고 한 장만 옆으로 빠진다",
+            caption="한 장만 빠진다",
+            key_object="a hinged diverter gate in the note path",
+            mechanism="a gate swings to push one note onto a reject channel",
+            visible_change="gate closed, note heading straight → gate open, note diverted",
+            camera_path="tracking shot following the diverted note",
+            visual_subject="diverter gate and the rejected note",
+            action="the gate swings and one note leaves the main path",
+            continuity_ids=("NOTE_HERO", "ATM_MAIN"),
         ),
         Step(
-            statement="확인을 마친 지폐는 금액별로 나뉜 카세트에 차곡차곡 쌓인다.",
-            spoken="확인을 마친 지폐만 금액별 카세트에 쌓입니다.",
+            statement="확인을 마친 지폐는 금액별 카세트에 순서대로 쌓인다.",
+            spoken=(
+                "확인을 마친 지폐만 금액별 카세트에 차곡차곡 쌓입니다. "
+                "세는 일과 확인하는 일이 같은 길 위에서 동시에 끝나는 셈이죠."
+            ),
             sfx_cue="stack_clunk",
-            visual_payoff="지폐가 카세트 안으로 들어가 기존 지폐 위에 눌려 쌓인다",
+            visual_payoff="지폐가 카세트 안에 한 장씩 눌려 쌓인다",
             caption="카세트에 쌓인다",
-            key_object="the accepted banknote entering a cassette",
-            mechanism="a stacker wheel presses each accepted note onto the pile",
-            visible_change="note entering the cassette mouth → note pressed flat onto the stack",
-            camera_path="pull back from the cassette mouth to reveal the growing stack",
-            visual_subject="banknote cassette receiving a note",
-            action="the stacker wheel folds the note onto the pile",
-            continuity_ids=("NOTE_HERO",),
-        ),
-        Step(
-            statement="지폐를 세는 일과 확인하는 일은 같은 이송로에서 이어서 일어난다.",
-            spoken="세는 일과 확인하는 일이 같은 길에서 이어집니다.",
-            visual_payoff="이송로 전체가 한 화면에 보이고 지폐 여러 장이 줄지어 흐른다",
-            caption="세기와 확인은 같은 길에서",
-            key_object="the full transport path seen end to end",
-            mechanism="counting and verification happen in sequence along one path",
-            visible_change="single note in frame → a steady line of notes flowing along the path",
-            camera_path="wide pull-back revealing the whole transport path at once",
-            visual_subject="the complete banknote transport path inside the ATM",
-            action="notes flow one after another through every stage",
-            continuity_ids=("ATM_MAIN",),
+            key_object="banknotes stacking inside a denomination cassette",
+            mechanism="accepted notes are pressed flat into their cassette in order",
+            visible_change="empty cassette slot → a growing stack of notes",
+            camera_path="pull back from the cassette as notes accumulate",
+            visual_subject="a denomination cassette filling with notes",
+            action="notes settle one by one into the stack",
+            continuity_ids=("NOTE_HERO", "ATM_MAIN"),
         ),
     ),
     surprise=Step(
@@ -384,6 +396,23 @@ def generic_scenario(topic: str, subject: str) -> Scenario:
             "마지막 칸에 쌓는 순서로 이어집니다."
         ),
         hook=f"{subject} 안에서 무슨 일이 생길까요?",
+        problem=Step(
+            statement="겉에서 보아서는 안에서 무엇이 일어나는지 알 수 없다.",
+            spoken=(
+                "뻔한 답은 열어 보는 겁니다. 그런데 이건 모의 데이터라서, "
+                "실제로 무엇이 들어 있는지는 여기서 알 수 없습니다."
+            ),
+            sfx_cue="none",
+            visual_payoff="닫힌 겉면만 보인다",
+            caption="겉만 보인다",
+            key_object=f"the closed outer surface of {subject}",
+            mechanism="the casing stays shut and reveals nothing",
+            visible_change="the closed surface → the same closed surface",
+            camera_path="slow push-in on the closed surface",
+            visual_subject=f"{subject} exterior",
+            action="the surface stays shut",
+            continuity_ids=("SUBJECT_MAIN",),
+        ),
         reveal=Step(
             statement="겉면이 열리면 안쪽으로 이어진 통로가 드러난다.",
             spoken="겉에서는 아무것도 보이지 않습니다. 안쪽에는 통로가 이어져 있죠.",
