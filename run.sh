@@ -6,6 +6,7 @@
 #   ./run.sh --resume third                          # continue an existing project
 #   ./run.sh --probe                                 # one cheap fal call, then stop
 #   ./run.sh --doctor                                # just the environment check
+#   ./run.sh --find-key                              # copy an API key from another .env
 #
 # Everything that used to be a separate paste lives here: pulling, the virtualenv,
 # the dependency install, the environment check, and the run. Each step says what
@@ -28,6 +29,7 @@ while [ $# -gt 0 ]; do
     --skip-pull)   SKIP_PULL=1; shift ;;
     --probe)       MODE="probe"; shift ;;
     --doctor)      MODE="doctor"; shift ;;
+    --find-key)    MODE="findkey"; shift ;;
     -h|--help)     sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)             TOPIC="$1"; shift ;;
   esac
@@ -74,6 +76,9 @@ if [ "$MODE" = "probe" ]; then
 fi
 if [ "$MODE" = "doctor" ]; then
   exec $PY scripts/doctor.py
+fi
+if [ "$MODE" = "findkey" ]; then
+  exec bash scripts/import_key.sh "${TOPIC:-FAL}"
 fi
 
 # -- 4. environment ---------------------------------------------------------
