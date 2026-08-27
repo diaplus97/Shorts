@@ -434,7 +434,8 @@ cp /c/Users/SAMSUNG/Shorts/Shorts/.env .env
 
 ### PowerShell
 
-`run.sh` will not run here; these are the steps it performs.
+Use `run.ps1`, the PowerShell twin of `run.sh`. Note that `/c/Users/...` is Git
+Bash syntax -- PowerShell reads it as `C:\c\Users\...` and cannot find it.
 
 ```powershell
 cd C:\Users\SAMSUNG
@@ -442,16 +443,23 @@ git clone https://github.com/diaplus97/Shorts.git shorts-factory
 cd shorts-factory
 git checkout claude/can-you-build-this-e8v5k5
 
-py -3.12 -m venv .venv
-.venv\Scripts\python -m pip install -e ".[dev]"
-
-# Copy the .env across yourself: the import script is bash.
 copy C:\Users\SAMSUNG\Shorts\Shorts\.env .env
 
-.venv\Scripts\python scripts\doctor.py
-.venv\Scripts\python scripts\probe_fal.py
-.venv\Scripts\python -m shorts_factory create "ATM은 어떻게 지폐를 셀까?"
+.\run.ps1 --setup --project-root D:/shorts-projects
+.\run.ps1 --doctor
+.\run.ps1 --probe
+.\run.ps1 "ATM은 어떻게 지폐를 셀까?"
 ```
+
+If PowerShell refuses to run the script at all, its execution policy is
+blocking local scripts. Allow them for the current user, once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Both flag spellings work (`--setup` and `-Setup`), so moving between Git Bash
+and PowerShell does not mean relearning them.
 
 ### Keeping the video off the system drive
 
