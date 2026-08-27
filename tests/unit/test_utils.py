@@ -196,3 +196,20 @@ def test_no_script_reads_a_secret_straight_from_the_environment() -> None:
                 offenders.append(f"{path.relative_to(root)}:{line_no}: {line.strip()}")
 
     assert not offenders, "these read a secret without alias resolution:\n" + "\n".join(offenders)
+
+
+def test_an_empty_key_is_reported_as_empty_not_as_missing(tmp_path, monkeypatch) -> None:
+    """A blank line in .env is present and does not work.
+
+    Reporting only names put "search needs SEARCH_API_KEY" directly underneath
+    a list containing SEARCH_API_KEY, which reads as a broken check rather than
+    as an empty line in a file.
+    """
+    from shorts_factory.scripts_doctor import env_entries
+
+    env = tmp_path / ".env"
+    env.write_text("IMAGE_API_KEY=abcdef123456\nSEARCH_API_KEY=\n# LLM_API_KEY=x\n")
+    entries = env_entries(env)
+
+    assert entries == {"IMAGE_API_KEY": True, "SEARCH_API_KEY": False}
+    assert "abcdef123456" not in str(entries), "the value must never be reported"

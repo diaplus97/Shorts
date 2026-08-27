@@ -144,35 +144,42 @@ def _env_file() -> Path | None:
     return None
 
 
-def env_key_names(path: Path | None = None) -> list[str]:
-    """The variable NAMES in the .env file. Never the values.
+def env_entries(path: Path | None = None) -> dict[str, bool]:
+    """Variable NAMES in the .env, each mapped to whether it has a value.
 
-    Printing which keys exist is the difference between "FAL_KEY is not set" --
-    which is true and useless -- and seeing that the file has FAL_API_KEY in it,
-    or that it has the Gemini keys and no fal one at all because only what was
-    needed at the time got copied across.
+    Never the values themselves. The flag matters as much as the name: a key
+    present but blank is listed as present and does not work, so reporting only
+    names produces "search needs SEARCH_API_KEY" directly under a list
+    containing SEARCH_API_KEY, which reads as a broken check rather than an
+    empty line in a file.
     """
     target = path or _env_file()
     if target is None:
-        return []
-    names: list[str] = []
+        return {}
+    entries: dict[str, bool] = {}
     try:
         for line in target.read_text(encoding="utf-8", errors="replace").splitlines():
             line = line.strip().removeprefix("export ").strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
-            name = line.split("=", 1)[0].strip()
+            name, _, value = line.partition("=")
+            name = name.strip()
             if name:
-                names.append(name)
+                entries[name] = bool(value.strip().strip("\"'"))
     except OSError:
-        return []
-    return names
+        return {}
+    return entries
+
+
+def env_key_names(path: Path | None = None) -> list[str]:
+    """Just the names, for callers that do not care whether they are filled."""
+    return list(env_entries(path))
 
 
 def _suggest_similar(wanted: str) -> None:
     """Point at a key that looks like the missing one, when there is one."""
-    present = env_key_names()
-    if not present:
+    entries = env_entries()
+    if not entries:
         path = _env_file()
         print(
             f"     no .env found from {Path.cwd()} upwards"
@@ -180,11 +187,24 @@ def _suggest_similar(wanted: str) -> None:
             else f"     {path} has no readable entries"
         )
         return
+
+    if wanted in entries and not entries[wanted]:
+        print(f"     {_env_file()} has {wanted}, but the line is empty. Give it a value.")
+        return
+
+    listed = ", ".join(
+        name if filled else f"{name} (empty)" for name, filled in sorted(entries.items())
+    )
+    print(f"     .env is {_env_file()} and has: {listed}")
+
     stem = wanted.replace("_API_KEY", "").replace("_KEY", "")
-    close = [n for n in present if stem and stem in n and n != wanted]
-    print(f"     .env is {_env_file()} and has: {', '.join(sorted(present))}")
+    close = [n for n, filled in entries.items() if filled and stem and stem in n and n != wanted]
     if close:
         print(f"     did you mean one of these? {', '.join(close)}")
+    elif filled_keys := [n for n, filled in entries.items() if filled and n.endswith("_API_KEY")]:
+        # Every Gemini secret takes the same key; a run fails on the one that
+        # was never copied across while four identical values sit beside it.
+        print(f"     if it is the same Gemini key, copy the value from: {filled_keys[0]}")
 
 
 def check_project_root(config: AppConfig | None) -> bool:
