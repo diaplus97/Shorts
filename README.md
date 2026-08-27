@@ -313,7 +313,6 @@ Providers are selected in config and credentialed in `.env`. The committed
 accident, so put your own choices in a **local override** instead of editing it:
 
 ```bash
-cp config/settings.local.yaml.example config/settings.local.yaml
 ```
 
 `config/*.local.yaml` is gitignored and merged over the matching `*.yaml` at
@@ -418,6 +417,11 @@ git checkout claude/can-you-build-this-e8v5k5
 # A fresh clone has no .env. Copy the whole one across -- it is a single file
 # and the keys in it are the same ones.
 cp /c/Users/SAMSUNG/Shorts/Shorts/.env .env
+
+# Writes config/settings.local.yaml: picks the Korean font for this OS and
+# points projects at another drive. Editing that YAML by hand is how a
+# backslash in a Windows path becomes a failed run twenty minutes later.
+./run.sh --setup --project-root D:/shorts-projects
 
 # Use this instead when a key is missing from an .env you already have. It
 # searches the machine and appends the matching line without opening either

@@ -7,6 +7,7 @@
 #   ./run.sh --probe                                 # one cheap fal call, then stop
 #   ./run.sh --doctor                                # just the environment check
 #   ./run.sh --find-key                              # copy an API key from another .env
+#   ./run.sh --setup --project-root D:/shorts-projects   # write config/settings.local.yaml
 #
 # Everything that used to be a separate paste lives here: pulling, the virtualenv,
 # the dependency install, the environment check, and the run. Each step says what
@@ -30,7 +31,11 @@ while [ $# -gt 0 ]; do
     --probe)       MODE="probe"; shift ;;
     --doctor)      MODE="doctor"; shift ;;
     --find-key)    MODE="findkey"; shift ;;
-    -h|--help)     sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --setup)       MODE="setup"; shift ;;
+    --project-root) SETUP_ARGS="--project-root ${2:-}"; shift 2 ;;
+    --font)        SETUP_ARGS="${SETUP_ARGS:-} --font ${2:-}"; shift 2 ;;
+    --force)       SETUP_ARGS="${SETUP_ARGS:-} --force"; shift ;;
+    -h|--help)     sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)             TOPIC="$1"; shift ;;
   esac
 done
@@ -76,6 +81,11 @@ if [ "$MODE" = "probe" ]; then
 fi
 if [ "$MODE" = "doctor" ]; then
   exec $PY scripts/doctor.py
+fi
+if [ "$MODE" = "setup" ]; then
+  step "writing config/settings.local.yaml for this machine"
+  # shellcheck disable=SC2086 -- SETUP_ARGS is a deliberate word list
+  exec $PY scripts/setup_local.py ${SETUP_ARGS:-}
 fi
 if [ "$MODE" = "findkey" ]; then
   exec bash scripts/import_key.sh "${TOPIC:-FAL}"
