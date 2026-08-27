@@ -2,6 +2,7 @@
 #
 #   .\run.ps1 "ATM은 어떻게 지폐를 셀까?"
 #   .\run.ps1 --setup --project-root D:/shorts-projects
+#   .\run.ps1 --fix-keys
 #   .\run.ps1 --doctor
 #   .\run.ps1 --probe
 #   .\run.ps1 --script-only "김치는 어떻게 발효될까?"
@@ -36,6 +37,8 @@ while ($i -lt $args.Count) {
     switch -Regex ($a) {
         '^--?setup$'        { $Mode = "setup";  $i++ }
         '^--?doctor$'       { $Mode = "doctor"; $i++ }
+        '^--?fix-?keys$'    { $Mode = "fixkeys"; $i++ }
+        '^--?dry-?run$'     { $SetupArgs += "--dry-run"; $i++ }
         '^--?probe$'        { $Mode = "probe";  $i++ }
         '^--?script-?only$' { $Mode = "script"; $i++ }
         '^--?resume$'       { $Resume = [string]$args[$i + 1]; $i += 2 }
@@ -82,6 +85,11 @@ Write-Ok "python ready"
 # -- the modes that stop before the pipeline --------------------------------
 if ($Mode -eq "setup")  { & $VenvPython scripts\setup_local.py @SetupArgs; exit $LASTEXITCODE }
 if ($Mode -eq "doctor") { & $VenvPython scripts\doctor.py;                 exit $LASTEXITCODE }
+if ($Mode -eq "fixkeys") {
+    Write-Step "filling blank Gemini keys from one that has a value"
+    & $VenvPython scripts\fill_keys.py @SetupArgs
+    exit $LASTEXITCODE
+}
 if ($Mode -eq "probe")  {
     Write-Step "one fal call, so a wrong field name costs a clip and not a run"
     & $VenvPython scripts\probe_fal.py
