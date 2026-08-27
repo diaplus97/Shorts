@@ -24,7 +24,7 @@ import httpx
 from dotenv import load_dotenv
 
 from shorts_factory.providers.base import find_secret
-from shorts_factory.providers.video.fal import base_app_id
+from shorts_factory.providers.video.fal import queue_app_id
 
 BASE_URL = "https://queue.fal.run"
 DEFAULT_MODEL = "fal-ai/wan/v2.6/image-to-video"
@@ -170,10 +170,10 @@ async def main() -> int:
         # Building the url from the model gets 405 on every poll, which looks
         # like a stuck job. The reply says where to look.
         status_url = submitted.get("status_url") or (
-            f"{BASE_URL}/{base_app_id(model)}/requests/{request_id}/status"
+            f"{BASE_URL}/{queue_app_id(model)}/requests/{request_id}/status"
         )
         result_url = submitted.get("response_url") or (
-            f"{BASE_URL}/{base_app_id(model)}/requests/{request_id}"
+            f"{BASE_URL}/{queue_app_id(model)}/requests/{request_id}"
         )
         print(f"  polling {status_url}\n")
 
@@ -199,34 +199,20 @@ async def main() -> int:
             print(f"\n  still running after {args.timeout:.0f}s; not an error, just slow.")
             return 0
 
-        # status answers on the short path and the result does not: the same url
-        # returns 404 "Path /v2.6/image-to-video not found". The clip is already
-        # generated and billed by now, so looking in more than one place is free
-        # and giving up after one is what loses it.
-        for candidate in [
-            f"{BASE_URL}/{model}/requests/{request_id}",
-            result_url,
-            f"{BASE_URL}/{base_app_id(model)}/requests/{request_id}",
-        ]:
-            result = await client.get(candidate, headers=headers)
-            print(f"\n  result  HTTP {result.status_code}  {candidate}")
-            if result.status_code < 400:
-                print(f"          {result.text[:1200]}\n")
-                break
-            print(f"          {result.text[:200]}")
-        else:
-            print()
-            if "not found" in result.text.lower():
-                # The 404 names a path that was not in the request. fal resolved
-                # the id, rebuilt the model path from it, and could not route
-                # it -- which is what an id that does not exist looks like from
-                # the outside. Submit is lenient enough to queue it anyway.
-                print("  The model id is the suspect, not the url.")
-                print(f"  fal could not route '{model}' when asked for the result, and")
-                print("  a real image-to-video job does not finish in five seconds.")
-                print()
-                print("  Find the exact id on the model's page at fal.ai/models -- the")
-                print("  API tab shows the path to submit to -- and try it here:")
+        # One url, matching fal's own client: the queue answers under
+        # owner/alias. A 404 naming a path here is not "look elsewhere" -- it
+        # is fal saying the endpoint the request was submitted to does not
+        # exist, which is also why the job "completed" in seconds.
+        result = await client.get(result_url, headers=headers)
+        print(f"\n  result  HTTP {result.status_code}  {result_url}")
+        print(f"          {result.text[:1200]}\n")
+        if result.status_code >= 400:
+            if "not found" in result.text.lower() and "path" in result.text.lower():
+                print(f"  fal has no endpoint '{model}'.")
+                print("  A submission to any path under a real app is accepted, so a wrong")
+                print("  id is not refused -- it queues, finishes in seconds having made")
+                print("  nothing, and only fails here. Get the exact id from the model's")
+                print("  page at fal.ai/models (the API tab) and try it:")
                 print("      ./run.sh --probe --model <id>")
             else:
                 print("  the clip was generated and billed but could not be collected.")

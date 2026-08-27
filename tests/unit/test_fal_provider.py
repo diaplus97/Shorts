@@ -7,6 +7,7 @@ most expensive option on the market and it was the default, which priced a
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import httpx
@@ -19,6 +20,8 @@ from shorts_factory.providers.video.fal import (
     data_uri,
     find_duration,
     find_video_url,
+    queue_app_id,
+    unknown_endpoint,
 )
 
 MODEL = "fal-ai/wan/v2.6/image-to-video"
@@ -158,7 +161,7 @@ async def test_a_finished_job_with_no_video_says_so(tmp_path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"logs": ["done"]})
 
-    with pytest.raises(ProviderError, match="no result url held the video"):
+    with pytest.raises(ProviderError, match="held no video"):
         await provider(handler).download("r", tmp_path / "clip.mp4")
 
 
@@ -268,36 +271,28 @@ async def test_a_resumed_run_falls_back_to_the_base_app_id() -> None:
 
 
 def test_the_queue_id_drops_the_version_and_the_task() -> None:
+    assert base_app_id is queue_app_id, "the old name is kept as an alias"
     assert base_app_id("fal-ai/wan/v2.6/image-to-video") == "fal-ai/wan"
     assert base_app_id("fal-ai/kling-video/v2.6/pro/image-to-video") == "fal-ai/kling-video"
     assert base_app_id("fal-ai/wan") == "fal-ai/wan"
 
 
-async def test_the_result_is_collected_from_the_versioned_path(tmp_path) -> None:
-    """Status and result disagree about the path, so both are tried.
+async def test_the_result_is_fetched_from_owner_slash_alias(tmp_path) -> None:
+    """The queue answers under owner/alias, with version and task dropped.
 
-    Real behaviour from fal: the short path reports COMPLETED and then answers
-    the result request with 404 "Path /v2.6/image-to-video not found". The clip
-    is generated and billed at that point, so giving up after one url loses a
-    paid clip.
+    Transcribed from fal's own client rather than inferred. Inferring it cost
+    two rounds: the full path answers 405 Method Not Allowed, and the short one
+    is what fal itself returns as response_url.
     """
     asked: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if request.method == "POST":
-            return httpx.Response(
-                200,
-                json={
-                    "request_id": "abc",
-                    "response_url": "https://queue.fal.run/fal-ai/wan/requests/abc",
-                },
-            )
+            return httpx.Response(200, json={"request_id": "abc"})
         if url.endswith("/out.mp4"):
             return httpx.Response(200, content=b"MP4")
         asked.append(url)
-        if "v2.6" not in url:
-            return httpx.Response(404, json={"detail": "Path /v2.6/image-to-video not found"})
         return httpx.Response(200, json={"video": {"url": "https://cdn.fal/out.mp4"}})
 
     p = provider(handler)
@@ -305,10 +300,53 @@ async def test_the_result_is_collected_from_the_versioned_path(tmp_path) -> None
     result = await p.download("abc", tmp_path / "clip.mp4")
 
     assert Path(result.path).read_bytes() == b"MP4"
-    assert "v2.6" in asked[0], "the versioned path is tried first, since it is the one that works"
+    assert asked == ["https://queue.fal.run/fal-ai/wan/requests/abc"]
 
 
-async def test_a_clip_that_is_nowhere_names_every_url_tried(tmp_path) -> None:
+async def test_an_endpoint_that_does_not_exist_says_so(tmp_path) -> None:
+    """A wrong model id is not refused at submit -- only at the result.
+
+    fal queues a submission to any path under an app that exists, reports
+    COMPLETED in about five seconds having generated nothing, and then answers
+    the result call with 404 naming a path the request never contained.
+    Reporting that as "no video in the result" sends you to debug the adapter.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"request_id": "abc"})
+        return httpx.Response(404, json={"detail": "Path /v2.6/image-to-video not found"})
+
+    p = FalVideoProvider(
+        model="fal-ai/wan/v2.6/image-to-video",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await p.submit(prompt="x", duration_sec=5, aspect_ratio="9:16")
+    with pytest.raises(
+        ProviderError, match=re.escape("no endpoint 'fal-ai/wan/v2.6/image-to-video'")
+    ):
+        await p.download("abc", tmp_path / "clip.mp4")
+
+
+def test_only_a_routing_404_is_read_as_a_bad_endpoint() -> None:
+    assert unknown_endpoint('fal HTTP 404: {"detail":"Path /v2.6/image-to-video not found"}')
+    assert not unknown_endpoint("fal HTTP 404: request not found")
+    assert not unknown_endpoint("fal HTTP 500: server error")
+
+
+def test_a_namespaced_id_keeps_its_prefix() -> None:
+    """workflows/ and comfy/ shift owner and alias one segment along."""
+    assert queue_app_id("workflows/me/my-flow") == "workflows/me/my-flow"
+    assert queue_app_id("comfy/me/graph") == "comfy/me/graph"
+
+
+async def test_a_plain_404_is_not_dressed_up_as_a_bad_endpoint(tmp_path) -> None:
+    """Only a 404 that names a path means the endpoint id is wrong.
+
+    A request id that has expired also 404s, and telling someone to go and
+    check their model id over that would send them to fix something correct.
+    """
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "POST":
             return httpx.Response(200, json={"request_id": "abc"})
@@ -316,5 +354,6 @@ async def test_a_clip_that_is_nowhere_names_every_url_tried(tmp_path) -> None:
 
     p = provider(handler)
     await p.submit(prompt="x", duration_sec=5, aspect_ratio="9:16")
-    with pytest.raises(ProviderError, match="Tried:"):
+    with pytest.raises(ProviderError, match="HTTP 404") as caught:
         await p.download("abc", tmp_path / "clip.mp4")
+    assert "no endpoint" not in str(caught.value)

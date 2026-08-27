@@ -189,28 +189,24 @@ class FalVideoProvider:
         )
 
     async def download(self, job_id: str, destination: str | Path) -> VideoResult:
-        url: str | None = None
-        body: dict[str, Any] = {}
-        failures: list[str] = []
-        for candidate in self._result_urls(job_id):
-            try:
-                body = await self._request("GET", candidate)
-            except ProviderError as exc:
-                if "404" not in str(exc):
-                    raise
-                failures.append(candidate)
-                continue
-            url = find_video_url(body)
-            if url is not None:
-                if failures:
-                    log.info("fal_result_url", used=candidate, after_404=len(failures))
-                break
-            failures.append(candidate)
+        result_url = self._result_url(job_id)
+        try:
+            body = await self._request("GET", result_url)
+        except ProviderError as exc:
+            if not unknown_endpoint(str(exc)):
+                raise
+            raise ProviderError(
+                f"fal has no endpoint '{self.model}'. The submission was accepted because "
+                "the app exists, but nothing sits at that path -- which is why the job "
+                "'completed' in seconds having generated nothing. Check the id on the "
+                f"model's page at fal.ai/models. fal said: {str(exc)[-160:]}",
+                provider=self.name,
+            ) from exc
 
+        url = find_video_url(body)
         if url is None:
             raise ProviderError(
-                "fal reported the job finished but no result url held the video. "
-                f"Tried: {', '.join(failures)}",
+                f"fal reported the job finished but the result held no video: {str(body)[:300]}",
                 provider=self.name,
             )
 
@@ -248,30 +244,18 @@ class FalVideoProvider:
         base = f"{self.base_url}/{base_app_id(self.model)}/requests/{job_id}"
         return f"{base}/status" if kind == "status" else base
 
-    def _result_urls(self, job_id: str) -> list[str]:
-        """Every place the finished clip might be, best first.
+    def _result_url(self, job_id: str) -> str:
+        """Where the finished clip is. One place.
 
-        fal is not consistent between its two queue endpoints for a versioned
-        model. Status answers on the short path -- ``fal-ai/wan/requests/<id>``
-        -- and reports COMPLETED. The result on that same path answers 404
-        "Path /v2.6/image-to-video not found", so collection wants the full
-        model path the request was submitted to, while the ``response_url`` fal
-        itself hands back at submit time is the short one.
-
-        Trying more than one costs nothing: by this point the clip is generated
-        and already billed, and a 404 looking for it is free. Guessing once and
-        giving up is what costs -- a paid clip left on the server.
+        This tried three urls while the right one was still being guessed. It is
+        not a guess now: ``queue_app_id`` is transcribed from fal's own client,
+        and the queue always answers under ``owner/alias`` -- which is also the
+        ``response_url`` fal returns. A 404 here does not mean "look elsewhere";
+        it means fal resolved the request and could not route the endpoint it
+        was submitted to. Extra attempts only hide that.
         """
-        candidates = [
-            f"{self.base_url}/{self.model}/requests/{job_id}",
-            self._jobs.get(job_id, {}).get("result", ""),
-            f"{self.base_url}/{base_app_id(self.model)}/requests/{job_id}",
-        ]
-        ordered: list[str] = []
-        for candidate in candidates:
-            if candidate and candidate not in ordered:
-                ordered.append(candidate)
-        return ordered
+        recorded = self._jobs.get(job_id, {}).get("result")
+        return recorded or f"{self.base_url}/{queue_app_id(self.model)}/requests/{job_id}"
 
     # -- transport -------------------------------------------------------
 
@@ -328,16 +312,51 @@ class FalVideoProvider:
             ) from exc
 
 
-def base_app_id(model: str) -> str:
-    """The owner/app part of a fal model path.
+#: Namespaces that shift owner and alias one segment along. Taken from fal's
+#: own client (``APP_NAMESPACES``), not guessed.
+APP_NAMESPACES = ("workflows", "comfy")
 
-    ``fal-ai/wan/v2.6/image-to-video`` is where a request is *submitted*, but
-    its queue lives under ``fal-ai/wan``. Everything after the second segment is
-    a version and a task, and including it gets 405 Method Not Allowed on every
-    poll -- which reads like a broken job rather than a wrong url.
+
+def queue_app_id(model: str) -> str:
+    """The ``owner/alias`` a request's queue lives under.
+
+    This mirrors ``AppId.from_endpoint_id`` in fal's official client, which is
+    where the rule was finally read rather than inferred. Two different paths
+    are in play, and conflating them cost several rounds:
+
+    * **Submit** goes to the endpoint id exactly as written --
+      ``fal-ai/wan/v2.6/image-to-video``.
+    * **Status, result and cancel** go to ``owner/alias`` only --
+      ``fal-ai/wan/requests/<id>`` -- with the version and the task dropped. It
+      is also what fal returns as ``response_url``, and asking the full path
+      there answers 405 Method Not Allowed.
+
+    A ``workflows/`` or ``comfy/`` prefix shifts owner and alias one segment
+    along and stays on the front.
     """
     parts = [part for part in model.strip("/").split("/") if part]
-    return "/".join(parts[:2]) if len(parts) >= 2 else model.strip("/")
+    if parts and parts[0] in APP_NAMESPACES:
+        namespace, parts = parts[0], parts[1:]
+        return "/".join([namespace, *parts[:2]])
+    return "/".join(parts[:2])
+
+
+#: The previous name, kept so callers and tests do not all have to move.
+base_app_id = queue_app_id
+
+
+def unknown_endpoint(message: str) -> bool:
+    """Whether a failure means the endpoint id does not exist.
+
+    fal accepts a submission to any path under an app that exists, so a wrong
+    id is not refused at submit. It queues, reports COMPLETED within seconds
+    having generated nothing, and the result call answers 404 naming a path the
+    request never contained -- fal rebuilt it from the id and could not route
+    it. Reported as "no video in the result" that reads as a broken adapter;
+    reported as this, it names the one line that has to change.
+    """
+    lowered = message.lower()
+    return "404" in lowered and "not found" in lowered and "path" in lowered
 
 
 def data_uri(path: str | Path) -> str:
