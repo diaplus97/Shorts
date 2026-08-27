@@ -85,8 +85,15 @@ tts:
 # It prints the raw request and response, so a rejected field name is visible
 # rather than discovered halfway through a paid run.
 video:
-  # $0.05/s. Swap for fal-ai/kling-video/v2.6/pro/image-to-video ($0.07/s) if
-  # shot-to-shot consistency needs more help than the anchor frame gives it.
+  # CHECK THIS BEFORE A PAID RUN. Model ids here are written from published
+  # comparisons, not from fal's own model list, and a wrong one is not rejected
+  # at submit: fal queues it, reports COMPLETED in about five seconds, and then
+  # cannot route the request for the result. The exact path is on the model's
+  # page at fal.ai/models under the API tab.
+  #
+  #   ./run.sh --probe --model <id>
+  #
+  # costs one clip and says whether an id works.
   model: fal-ai/wan/v2.6/image-to-video
   base_url: https://queue.fal.run
   # Empty means the model takes any length. Veo forced fixed lengths; most

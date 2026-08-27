@@ -190,6 +190,10 @@ async def main() -> int:
                     state = status.text[:80]
             print(f"  {waited:5.0f}s  HTTP {status.status_code}  {state}")
             if state.upper() in ("COMPLETED", "OK", "FAILED", "ERROR", "CANCELLED"):
+                # The whole body, not just the word. A job that "completed" in
+                # five seconds did not generate a video -- Wan takes minutes --
+                # and whatever it did instead is described here.
+                print(f"\n  status body\n          {status.text[:1500]}\n")
                 break
         else:
             print(f"\n  still running after {args.timeout:.0f}s; not an error, just slow.")
@@ -211,7 +215,21 @@ async def main() -> int:
                 break
             print(f"          {result.text[:200]}")
         else:
-            print("\n  the clip was generated and billed but could not be collected.")
+            print()
+            if "not found" in result.text.lower():
+                # The 404 names a path that was not in the request. fal resolved
+                # the id, rebuilt the model path from it, and could not route
+                # it -- which is what an id that does not exist looks like from
+                # the outside. Submit is lenient enough to queue it anyway.
+                print("  The model id is the suspect, not the url.")
+                print(f"  fal could not route '{model}' when asked for the result, and")
+                print("  a real image-to-video job does not finish in five seconds.")
+                print()
+                print("  Find the exact id on the model's page at fal.ai/models -- the")
+                print("  API tab shows the path to submit to -- and try it here:")
+                print("      ./run.sh --probe --model <id>")
+            else:
+                print("  the clip was generated and billed but could not be collected.")
             return 1
 
     print("  What to check in the result above:")

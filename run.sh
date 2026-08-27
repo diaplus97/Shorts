@@ -30,6 +30,7 @@ while [ $# -gt 0 ]; do
     --script-only) SCRIPT_ONLY=1; shift ;;
     --skip-pull)   SKIP_PULL=1; shift ;;
     --probe)       MODE="probe"; shift ;;
+    --model)       PROBE_ARGS="--model ${2:-}"; shift 2 ;;
     --doctor)      MODE="doctor"; shift ;;
     --find-key)    MODE="findkey"; shift ;;
     --setup)       MODE="setup"; shift ;;
@@ -107,7 +108,8 @@ ok "python ready"
 # when the venv happens to be active.
 if [ "$MODE" = "probe" ]; then
   step "one fal call, so a wrong field name costs a clip and not a run"
-  exec $PY scripts/probe_fal.py "$@"
+  # shellcheck disable=SC2086 -- PROBE_ARGS is a deliberate word list
+  exec $PY scripts/probe_fal.py ${PROBE_ARGS:-}
 fi
 if [ "$MODE" = "doctor" ]; then
   exec $PY scripts/doctor.py
