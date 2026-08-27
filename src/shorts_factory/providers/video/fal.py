@@ -189,12 +189,28 @@ class FalVideoProvider:
         )
 
     async def download(self, job_id: str, destination: str | Path) -> VideoResult:
-        body = await self._request("GET", self._url(job_id, "result"))
+        url: str | None = None
+        body: dict[str, Any] = {}
+        failures: list[str] = []
+        for candidate in self._result_urls(job_id):
+            try:
+                body = await self._request("GET", candidate)
+            except ProviderError as exc:
+                if "404" not in str(exc):
+                    raise
+                failures.append(candidate)
+                continue
+            url = find_video_url(body)
+            if url is not None:
+                if failures:
+                    log.info("fal_result_url", used=candidate, after_404=len(failures))
+                break
+            failures.append(candidate)
 
-        url = find_video_url(body)
         if url is None:
             raise ProviderError(
-                f"fal reported the job finished but the result has no video url: {str(body)[:300]}",
+                "fal reported the job finished but no result url held the video. "
+                f"Tried: {', '.join(failures)}",
                 provider=self.name,
             )
 
@@ -225,18 +241,37 @@ class FalVideoProvider:
         return VideoResult(path=str(target), model=self.model, duration_sec=find_duration(body))
 
     def _url(self, job_id: str, kind: str) -> str:
-        """Where to poll or collect one job.
-
-        Prefers the url fal returned at submit time. The fallback exists for a
-        resumed run, where the response is long gone, and uses ``base_app_id``
-        rather than the configured model path for the reason described on
-        ``_jobs``.
-        """
+        """Where to poll one job."""
         recorded = self._jobs.get(job_id, {}).get(kind)
         if recorded:
             return recorded
         base = f"{self.base_url}/{base_app_id(self.model)}/requests/{job_id}"
         return f"{base}/status" if kind == "status" else base
+
+    def _result_urls(self, job_id: str) -> list[str]:
+        """Every place the finished clip might be, best first.
+
+        fal is not consistent between its two queue endpoints for a versioned
+        model. Status answers on the short path -- ``fal-ai/wan/requests/<id>``
+        -- and reports COMPLETED. The result on that same path answers 404
+        "Path /v2.6/image-to-video not found", so collection wants the full
+        model path the request was submitted to, while the ``response_url`` fal
+        itself hands back at submit time is the short one.
+
+        Trying more than one costs nothing: by this point the clip is generated
+        and already billed, and a 404 looking for it is free. Guessing once and
+        giving up is what costs -- a paid clip left on the server.
+        """
+        candidates = [
+            f"{self.base_url}/{self.model}/requests/{job_id}",
+            self._jobs.get(job_id, {}).get("result", ""),
+            f"{self.base_url}/{base_app_id(self.model)}/requests/{job_id}",
+        ]
+        ordered: list[str] = []
+        for candidate in candidates:
+            if candidate and candidate not in ordered:
+                ordered.append(candidate)
+        return ordered
 
     # -- transport -------------------------------------------------------
 

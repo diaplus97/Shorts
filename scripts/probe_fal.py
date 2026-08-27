@@ -195,9 +195,24 @@ async def main() -> int:
             print(f"\n  still running after {args.timeout:.0f}s; not an error, just slow.")
             return 0
 
-        result = await client.get(result_url, headers=headers)
-        print(f"\n  result  HTTP {result.status_code}")
-        print(f"          {result.text[:1200]}\n")
+        # status answers on the short path and the result does not: the same url
+        # returns 404 "Path /v2.6/image-to-video not found". The clip is already
+        # generated and billed by now, so looking in more than one place is free
+        # and giving up after one is what loses it.
+        for candidate in [
+            f"{BASE_URL}/{model}/requests/{request_id}",
+            result_url,
+            f"{BASE_URL}/{base_app_id(model)}/requests/{request_id}",
+        ]:
+            result = await client.get(candidate, headers=headers)
+            print(f"\n  result  HTTP {result.status_code}  {candidate}")
+            if result.status_code < 400:
+                print(f"          {result.text[:1200]}\n")
+                break
+            print(f"          {result.text[:200]}")
+        else:
+            print("\n  the clip was generated and billed but could not be collected.")
+            return 1
 
     print("  What to check in the result above:")
     print("    * a url ending .mp4 -- the adapter walks the response for one, so")

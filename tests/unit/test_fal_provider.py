@@ -158,7 +158,7 @@ async def test_a_finished_job_with_no_video_says_so(tmp_path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"logs": ["done"]})
 
-    with pytest.raises(ProviderError, match="no video url"):
+    with pytest.raises(ProviderError, match="no result url held the video"):
         await provider(handler).download("r", tmp_path / "clip.mp4")
 
 
@@ -271,3 +271,50 @@ def test_the_queue_id_drops_the_version_and_the_task() -> None:
     assert base_app_id("fal-ai/wan/v2.6/image-to-video") == "fal-ai/wan"
     assert base_app_id("fal-ai/kling-video/v2.6/pro/image-to-video") == "fal-ai/kling-video"
     assert base_app_id("fal-ai/wan") == "fal-ai/wan"
+
+
+async def test_the_result_is_collected_from_the_versioned_path(tmp_path) -> None:
+    """Status and result disagree about the path, so both are tried.
+
+    Real behaviour from fal: the short path reports COMPLETED and then answers
+    the result request with 404 "Path /v2.6/image-to-video not found". The clip
+    is generated and billed at that point, so giving up after one url loses a
+    paid clip.
+    """
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "request_id": "abc",
+                    "response_url": "https://queue.fal.run/fal-ai/wan/requests/abc",
+                },
+            )
+        if url.endswith("/out.mp4"):
+            return httpx.Response(200, content=b"MP4")
+        asked.append(url)
+        if "v2.6" not in url:
+            return httpx.Response(404, json={"detail": "Path /v2.6/image-to-video not found"})
+        return httpx.Response(200, json={"video": {"url": "https://cdn.fal/out.mp4"}})
+
+    p = provider(handler)
+    await p.submit(prompt="x", duration_sec=5, aspect_ratio="9:16")
+    result = await p.download("abc", tmp_path / "clip.mp4")
+
+    assert Path(result.path).read_bytes() == b"MP4"
+    assert "v2.6" in asked[0], "the versioned path is tried first, since it is the one that works"
+
+
+async def test_a_clip_that_is_nowhere_names_every_url_tried(tmp_path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"request_id": "abc"})
+        return httpx.Response(404, json={"detail": "not found"})
+
+    p = provider(handler)
+    await p.submit(prompt="x", duration_sec=5, aspect_ratio="9:16")
+    with pytest.raises(ProviderError, match="Tried:"):
+        await p.download("abc", tmp_path / "clip.mp4")
