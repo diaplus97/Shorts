@@ -94,7 +94,10 @@ video:
   #   ./run.sh --probe --model <id>
   #
   # costs one clip and says whether an id works.
-  model: fal-ai/wan/v2.6/image-to-video
+  # A flat id, with no version or task suffix, so the submit path and the queue
+  # path are the same string -- which removes the routing ambiguity that a
+  # versioned id like fal-ai/wan/v2.6/image-to-video ran into.
+  model: fal-ai/wan-i2v
   base_url: https://queue.fal.run
   # Empty means the model takes any length. Veo forced fixed lengths; most
   # models on fal do not, and rounding up to one would overpay every scene.
