@@ -9,6 +9,8 @@
 #   ./run.sh --find-key                              # copy an API key from another .env
 #   ./run.sh --setup --project-root D:/shorts-projects   # write config/settings.local.yaml
 #   ./run.sh --fix-keys                              # fill blank Gemini keys from a filled one
+#   ./run.sh --until direct "<topic>"                # stop after any stage
+#   ./run.sh --anchor <project>                      # buy one diagram frame, ~4 cents
 #
 # Everything that used to be a separate paste lives here: pulling, the virtualenv,
 # the dependency install, the environment check, and the run. Each step says what
@@ -35,11 +37,13 @@ while [ $# -gt 0 ]; do
     --find-key)    MODE="findkey"; shift ;;
     --setup)       MODE="setup"; shift ;;
     --fix-keys)    MODE="fixkeys"; shift ;;
+    --anchor)      MODE="anchor"; shift ;;
+    --until)       UNTIL="${2:-}"; shift 2 ;;
     --dry-run)     SETUP_ARGS="${SETUP_ARGS:-} --dry-run"; shift ;;
     --project-root) SETUP_ARGS="--project-root ${2:-}"; shift 2 ;;
     --font)        SETUP_ARGS="${SETUP_ARGS:-} --font ${2:-}"; shift 2 ;;
     --force)       SETUP_ARGS="${SETUP_ARGS:-} --force"; shift ;;
-    -h|--help)     sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)     sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)             TOPIC="$1"; shift ;;
   esac
 done
@@ -119,6 +123,10 @@ if [ "$MODE" = "setup" ]; then
   # shellcheck disable=SC2086 -- SETUP_ARGS is a deliberate word list
   exec $PY scripts/setup_local.py ${SETUP_ARGS:-}
 fi
+if [ "$MODE" = "anchor" ]; then
+  step "one image: the picture every scene is drawn from"
+  exec $PY scripts/preview_anchor.py "${TOPIC:?give me a project: ./run.sh --anchor projects/<slug>}"
+fi
 if [ "$MODE" = "fixkeys" ]; then
   step "filling blank Gemini keys from one that has a value"
   # shellcheck disable=SC2086 -- SETUP_ARGS is a deliberate word list
@@ -160,6 +168,9 @@ if dirs:
 if [ -n "$RESUME" ]; then
   step "resuming $RESUME"
   $PY -m shorts_factory resume "$RESUME"; STATUS=$?
+elif [ -n "${UNTIL:-}" ]; then
+  step "running as far as '$UNTIL' and stopping there"
+  $PY -m shorts_factory create "$TOPIC" --until "$UNTIL"; STATUS=$?
 elif [ "$SCRIPT_ONLY" = "1" ]; then
   step "writing the script only -- nothing here is billed beyond research and the writer"
   $PY -m shorts_factory create "$TOPIC" --until write; STATUS=$?
