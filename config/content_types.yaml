@@ -1,0 +1,68 @@
+# Visual grammar per content type (spec section 19).
+# A/B/C differences are handled here, NOT by forking the pipeline.
+
+hidden_system:
+  label: "Hidden System"
+  description: >
+    Invisible physical systems of cities, society and infrastructure.
+  reveal_pattern:
+    - normal_world
+    - hidden_layer
+    - flow
+    - infrastructure
+    - destination
+  preferred_camera:
+    - drone_push
+    - underground_dive
+    - tracking
+    - cutaway
+  preferred_visuals:
+    - cross_section
+    - cutaway
+    - infrastructure
+    - flow
+  default_reality_type: reconstructed
+
+inside_object:
+  label: "Inside Object"
+  description: >
+    Internal structure and mechanism of familiar machines and objects.
+  reveal_pattern:
+    - familiar_object
+    - approach
+    - cutaway
+    - mechanism
+    - macro_detail
+  preferred_camera:
+    - macro
+    - dolly_in
+    - orbit
+    - cutaway_transition
+  preferred_visuals:
+    - cutaway
+    - mechanism
+    - macro_detail
+  default_reality_type: reconstructed
+
+behind_action:
+  label: "Behind Action"
+  description: >
+    Digital, social and logistical processes triggered by a human action.
+  reveal_pattern:
+    - human_action
+    - trigger
+    - network
+    - processing
+    - response
+  preferred_camera:
+    - macro
+    - tracking
+    - orbit
+    - push_in
+  preferred_visuals:
+    - conceptual_flow
+    - system_nodes
+    - server_infrastructure
+    - signal_visualization
+  # Behind Action scenes are mostly explanatory visualisation, not real footage.
+  default_reality_type: conceptual

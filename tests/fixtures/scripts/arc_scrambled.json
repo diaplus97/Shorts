@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "title": "순서가 뒤집힌 대본",
+  "hook": "현금 입금기에 지폐를 넣으면 안에서는 무슨 일이 벌어질까요?",
+  "narration": "현금 입금기에 지폐를 넣으면 안에서는 무슨 일이 벌어질까요? 사람이 세는 대신 기계에게 계수를 맡긴 작은 공장입니다. 그래서 훼손된 지폐 한 장만 별도 통로로 빠집니다. 고무 롤러가 회전해서 맨 앞 지폐 한 장만 끌어당깁니다. 입금구 안쪽에는 고무 롤러가 줄지어 있습니다. 분리된 지폐는 센서 구간을 지납니다.",
+  "beats": [
+    {
+      "id": "B01",
+      "purpose": "hook",
+      "text": "현금 입금기에 지폐를 넣으면 안에서는 무슨 일이 벌어질까요?",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B02",
+      "purpose": "closing",
+      "text": "사람이 세는 대신 기계에게 계수를 맡긴 작은 공장입니다.",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B03",
+      "purpose": "surprise",
+      "text": "그래서 훼손된 지폐 한 장만 별도 통로로 빠집니다.",
+      "claim_ids": [
+        "C05"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B04",
+      "purpose": "process",
+      "text": "고무 롤러가 회전해서 맨 앞 지폐 한 장만 끌어당깁니다.",
+      "claim_ids": [
+        "C02"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B05",
+      "purpose": "reveal",
+      "text": "입금구 안쪽에는 고무 롤러가 줄지어 있습니다.",
+      "claim_ids": [
+        "C01"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B06",
+      "purpose": "process",
+      "text": "분리된 지폐는 센서 구간을 지납니다.",
+      "claim_ids": [
+        "C04"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    }
+  ],
+  "target_duration_sec": 58.0,
+  "resolved_question": "테스트용 질문입니다.",
+  "referenced_claim_ids": [
+    "C01",
+    "C02",
+    "C04",
+    "C05"
+  ],
+  "estimated_word_count": 44
+}

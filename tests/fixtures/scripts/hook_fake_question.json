@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "title": "훅이 진짜 질문이 아닌 대본",
+  "hook": "지폐가 들어오니까 롤러가 움직입니다.",
+  "narration": "지폐가 들어오니까 롤러가 움직입니다. 입금구 안쪽에는 고무 롤러가 줄지어 있습니다. 고무 롤러가 맨 앞 지폐를 끌어당기는데요. 분리된 지폐는 센서 구간을 지나갑니다. 그래서 훼손된 지폐만 별도 통로로 빠지죠. 이것이 현금 입금기입니다.",
+  "beats": [
+    {
+      "id": "B01",
+      "purpose": "hook",
+      "text": "지폐가 들어오니까 롤러가 움직입니다.",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B02",
+      "purpose": "reveal",
+      "text": "입금구 안쪽에는 고무 롤러가 줄지어 있습니다.",
+      "claim_ids": [
+        "C01"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B03",
+      "purpose": "process",
+      "text": "고무 롤러가 맨 앞 지폐를 끌어당기는데요.",
+      "claim_ids": [
+        "C02"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B04",
+      "purpose": "process",
+      "text": "분리된 지폐는 센서 구간을 지나갑니다.",
+      "claim_ids": [
+        "C03"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B05",
+      "purpose": "surprise",
+      "text": "그래서 훼손된 지폐만 별도 통로로 빠지죠.",
+      "claim_ids": [
+        "C04"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B06",
+      "purpose": "closing",
+      "text": "이것이 현금 입금기입니다.",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    }
+  ],
+  "target_duration_sec": 58.0,
+  "resolved_question": "테스트용 질문입니다.",
+  "referenced_claim_ids": [
+    "C01",
+    "C02",
+    "C03",
+    "C04"
+  ],
+  "estimated_word_count": 30
+}

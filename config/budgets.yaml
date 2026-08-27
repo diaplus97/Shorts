@@ -1,0 +1,129 @@
+# Cost limits and unit prices.
+#
+# NUMBERS BELOW ARE PLACEHOLDERS.
+# Before connecting a real provider, replace them with that provider's current
+# official pricing. Never hardcode prices in Python (spec section 29).
+
+project:
+  # Sized for mock runs, and deliberately too small for Veo Standard.
+  #
+  # One Short is about 11 scenes snapped to 4/6/8-second clips, so roughly 60
+  # billed seconds:
+  #   Veo 3.1 Standard  60s x $0.40 = ~$24 per Short
+  #   Veo 3.1 Fast      60s x $0.15 = ~$9  per Short
+  # plus up to 2 retries per failed scene at the same per-second rate.
+  #
+  # Fast fits under this cap and Standard does not. That is intentional: raise
+  # it consciously after a `--dry-run`, do not discover it mid-render.
+  max_total_usd: 12.00
+
+video:
+  max_scene_attempts: 3
+  max_high_priority_scenes: 4
+
+image:
+  max_scene_attempts: 2
+
+llm:
+  max_calls: 15
+
+# Unit prices used by the cost estimator and the budget guard.
+pricing:
+  llm:
+    mock:
+      input_usd_per_1k_tokens: 0.0
+      output_usd_per_1k_tokens: 0.0
+    openai:
+      input_usd_per_1k_tokens: 0.00015
+      output_usd_per_1k_tokens: 0.0006
+
+    # Gemini 2.5 Flash. Same sourcing caveat as the search rates below: taken
+    # from search-result summaries, not from Google's pricing pages, which are
+    # unreachable from the build environment.
+    gemini:
+      input_usd_per_1k_tokens: 0.0003
+      output_usd_per_1k_tokens: 0.0025
+  search:
+    mock:
+      usd_per_query: 0.0
+
+    # Google Search grounding, billed per grounded prompt. Checked 2026-08-25.
+    #
+    # SOURCING: Google's own pricing pages are unreachable from the build
+    # environment, so these come from search-result summaries cross-checked
+    # across sources, NOT from primary documentation. Verify before relying on
+    # a budget built from them.
+    #
+    #   Gemini 2.5 family   $35 / 1,000 prompts   1,500 requests/day free
+    #   Gemini 3.x family   $14 / 1,000 prompts   5,000 prompts/month free
+    #
+    # The 3.x rate is 2.5x cheaper with a larger free allowance. The default
+    # model here is a 2.5 because it is the one most keys can reach; run
+    # scripts/list_gemini_models.py and move up if a 3.x is available to you.
+    # At max_queries: 6 a run costs about $0.21 on 2.5, $0.08 on 3.x.
+    gemini:
+      usd_per_query: 0.035
+
+  image:
+    mock:
+      usd_per_image: 0.0
+
+    # Imagen 4, billed flat per image. Same sourcing caveat as search above.
+    #
+    #   Fast      $0.02      Standard  $0.04      Ultra  $0.06
+    #
+    # A rate keyed by model id wins over the "gemini" fallback, as with video.
+    # Stills are a fallback path, so a run normally buys few or none.
+    gemini:
+      usd_per_image: 0.04
+  video:
+    mock:
+      usd_per_second: 0.0
+
+    # Google Veo, billed per second of generated video. Checked 2026-08-19
+    # against Google's published rates; re-check before a paid run, these move.
+    #
+    # A rate keyed by model id wins over the "veo" fallback below, because
+    # Standard and Fast differ by more than 2.5x and picking the wrong one
+    # silently misprices every scene.
+    #
+    # Audio is included in the per-second rate either way. Veo 3.1 does not
+    # accept generateAudio at all, and normalisation drops the clip's audio
+    # before our narration is mixed, so neither affects what you pay.
+    veo-3.1-generate-preview:      # Veo 3.1 Standard, 720p and 1080p
+      usd_per_second: 0.40
+    veo-3.1-fast-generate-preview: # Veo 3.1 Fast, 720p and 1080p
+      usd_per_second: 0.15
+    # Fallback when the model id above is not listed.
+    veo:
+      usd_per_second: 0.40
+
+    # fal.ai routes one key to Kling, Wan, Seedance and others. Checked
+    # 2026-08-26 against published per-second rates; re-check before a paid run.
+    #
+    # The reason this section exists: Veo 3.1 Standard at $0.40/s is the most
+    # expensive option on the market, and it was the default here. A 65-second
+    # Short costs about $26 on it and about $3-5 on the models below. Same
+    # pipeline, same length, one config line.
+    #
+    #   fal-ai/kling-video/v2.6/pro/image-to-video     $0.07/s   consistency
+    #   fal-ai/wan/v2.6/image-to-video                 $0.05/s   cheapest solid
+    #   fal-ai/bytedance/seedance/v2/fast/i2v         ~$0.022/s  cheapest
+    #
+    # A rate keyed by the full model path wins over the "fal" fallback.
+    fal-ai/kling-video/v2.6/pro/image-to-video:
+      usd_per_second: 0.07
+    fal-ai/wan/v2.6/image-to-video:
+      usd_per_second: 0.05
+    # fal-ai/wan-i2v is deliberately not listed. Its rate has not been checked
+    # against fal's own pricing, and the "fal" fallback below over-estimates it
+    # -- which is the safe direction for a guard that blocks spending. Add a
+    # rate here once the real one is known, or every estimate stays pessimistic.
+    fal:
+      usd_per_second: 0.10
+
+  tts:
+    mock:
+      usd_per_1k_chars: 0.0
+    openai:
+      usd_per_1k_chars: 0.015

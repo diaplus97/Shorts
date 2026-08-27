@@ -1,0 +1,67 @@
+# Channel voice and spoken-delivery rules (spec v0.3 sections 3-5, 8-11).
+#
+# The narrator is stated here once, as data, rather than being implied by
+# whatever the writer prompt happened to say that week.
+
+tone_profile:
+  persona: calm_curiosity_documentary
+  language: ko
+  formality: polite_conversational
+  energy: moderate
+  sentence_style: "spoken, concrete, visual, concise"
+  prohibited_patterns:
+    - academic prose
+    - machine manual prose
+    - news anchor stiffness
+    - exaggerated YouTuber speech
+    - excessive exclamation
+    - excessive rhetorical questions
+    - repetitive sentence endings
+    - unnecessary nominalization
+
+speech:
+  # One breath, one idea. Character counts are a heuristic, not a hard rule:
+  # a unit is never cut through a number, a proper noun or a particle.
+  min_unit_chars: 4
+  max_preferred_unit_chars: 30
+  hard_split_review_chars: 40
+
+  # Signals that a second information event has been packed into one breath.
+  max_information_events: 1
+
+  # Warn when this many units in a row end the same way.
+  max_consecutive_same_ending: 3
+  # Warn when every unit is roughly the same length: rhythm has gone flat.
+  min_length_variation_ratio: 0.25
+
+  # Silence inserted after a unit, by why the break is there.
+  pauses_ms:
+    clause: 150
+    shift: 250
+    sentence: 320
+    question: 380
+    reveal: 450
+    section: 550
+
+  # Clause endings a long sentence may be split on, in preference order.
+  clause_endings:
+    - 면서
+    - 는데
+    - 지만
+    - 니까
+    - 어서
+    - 아서
+    - 다가
+    - 면
+    - 고
+
+  # Sentence endings tracked for the repetition check.
+  # Surface endings, not stems: "합니다" and "갑니다" are the same beat to a
+  # listener, so they share the "니다" bucket.
+  tracked_endings:
+    - 니다
+    - 죠
+    - 는데요
+    - 까요
+    - 네요
+    - 군요

@@ -1,0 +1,120 @@
+# Copy to config/settings.local.yaml. Gitignored, and merged over
+# settings.yaml at load time, so keep only the keys you actually change.
+#
+#   cp config/settings.local.yaml.example config/settings.local.yaml
+#
+# The committed settings.yaml stays on mock providers so a fresh checkout runs
+# without spending anything. Real providers belong here, where `git pull` will
+# not fight them.
+#
+# Nested keys merge; lists replace. `shorts doctor` prints which override files
+# are in effect, and `shorts config` prints the merged result.
+
+# Everything on one Gemini key. Put that key in .env under all five names:
+# LLM_API_KEY, SEARCH_API_KEY, IMAGE_API_KEY, VIDEO_API_KEY, TTS_API_KEY.
+# They are separate so one can be rotated, or pointed at another vendor,
+# without touching the others.
+providers:
+  llm: gemini
+  search: gemini
+  image: gemini
+  video: veo
+  tts: gemini
+  # fal.ai routes one key to Kling, Wan, Seedance and the rest. Veo 3.1 Standard
+  # is $0.40/s -- the most expensive option on the market -- and prices a
+  # 65-second Short at about $26. The models below cost $3-5 for the same Short.
+  video: fal
+
+# Run `python scripts/list_gemini_models.py` first and use ids from its output.
+# A model missing from that list is not available to your key, whatever the
+# documentation says.
+
+llm:
+  # The writer is the stage where model quality shows up most, so this is the
+  # newest flash tier the key listed. Drop to gemini-2.5-flash if anything
+  # misbehaves -- both were present in the listing this was set from.
+  model: gemini-3.7-flash
+
+search:
+  # A 3.x model grounds at roughly 2.5x lower cost with a larger free tier
+  # than 2.5, so there is no reason to ground on an older one.
+  model: gemini-3.7-flash
+
+image:
+  # NOT an imagen-* id. Listing the key showed no imagen model at all: the
+  # image models are the gemini-*-image family and they answer generateContent,
+  # not predict. gemini-2.5-flash-image is the cheaper, longer-established one.
+  model: gemini-3.1-flash-image
+
+video:
+  model: veo-3.1-fast-generate-preview
+  # Veo returns fixed clip lengths. A request rounds UP to the shortest one
+  # that covers it, so this also decides what you are billed.
+  allowed_durations: [4, 6, 8]
+  # A real Veo job takes minutes; 2s polling just burns requests.
+  poll_interval_sec: 15
+
+tts:
+  model: gemini-2.5-flash-preview-tts
+  # `python scripts/list_gemini_models.py --kind tts` for what is available.
+  voice: Kore
+  # Pace. The default voice reads slowly for this format; 1.1-1.25 is usually
+  # the fix. Set it here rather than asking for a faster read in the style
+  # instruction below -- that changes the pace by an unpredictable amount, and
+  # every cut in the video is timed off the rendered audio.
+  #
+  #   python scripts/audition_voices.py --speeds 1.0,1.15,1.3
+  #
+  # audition_voices also measures characters per second for each pairing. Put
+  # that number in script.chars_per_sec below, or the writer will keep sizing
+  # scripts against a rate the voice does not read at.
+  speed: 1.0
+  # Gemini takes delivery direction in the prompt rather than as parameters.
+  # Keep this in step with config/voice.yaml's tone profile.
+  style_instruction: >
+    차분하고 호기심 있는 다큐멘터리 내레이터로, 친구에게 흥미로운 것을
+    설명하듯 읽어주세요. 과장하지 말고, 문장 사이는 자연스럽게 쉬어주세요.
+
+# OpenAI is still wired for llm and tts if you would rather use it; set
+# providers.llm/tts to "openai" and put OPENAI_API_KEY and TTS_API_KEY in .env.
+
+# fal.ai video. Check one model with a single cheap call before a full run:
+#
+#     python scripts/probe_fal.py --model <id>
+#
+# It prints the raw request and response, so a rejected field name is visible
+# rather than discovered halfway through a paid run.
+video:
+  # CHECK THIS BEFORE A PAID RUN. Model ids here are written from published
+  # comparisons, not from fal's own model list, and a wrong one is not rejected
+  # at submit: fal queues it, reports COMPLETED in about five seconds, and then
+  # cannot route the request for the result. The exact path is on the model's
+  # page at fal.ai/models under the API tab.
+  #
+  #   ./run.sh --probe --model <id>
+  #
+  # costs one clip and says whether an id works.
+  # A flat id, with no version or task suffix, so the submit path and the queue
+  # path are the same string -- which removes the routing ambiguity that a
+  # versioned id like fal-ai/wan/v2.6/image-to-video ran into.
+  model: fal-ai/wan-i2v
+  base_url: https://queue.fal.run
+  # Empty means the model takes any length. Veo forced fixed lengths; most
+  # models on fal do not, and rounding up to one would overpay every scene.
+  allowed_durations: []
+  # Field names differ per model. probe_fal.py names whichever one is wrong.
+  duration_field: duration
+  aspect_ratio_field: aspect_ratio
+  duration_as_string: false
+  # One still per scene, generated from a single anchor picture and handed to
+  # the video model as its opening frame. This is what stops every cut being a
+  # differently designed machine. Adds roughly $0.04 per scene.
+  anchor_frames: true
+
+# Where finished projects are written. The code is small; what grows is video,
+# stills and audio under this directory, several GB per Short. Pointing it at
+# another drive keeps that off the one the repository lives on.
+#
+# Windows paths work as written -- forward slashes are fine:
+#   project_root: D:/shorts-projects
+#project_root: projects

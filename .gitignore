@@ -1,0 +1,37 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# machine-specific config, merged over config/*.yaml at load time
+config/*.local.yaml
+!config/*.local.yaml.example
+
+# generated projects & media
+projects/*
+!projects/.gitkeep
+output/
+*.mp4
+*.wav
+*.mp3
+*.m4a
+*.png
+*.jpg
+
+# test fixtures are generated on demand, but keep the directory
+!tests/fixtures/**/*.json
+!tests/fixtures/**/*.md
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/

@@ -1,0 +1,99 @@
+# Content Quality Contract (spec v0.2 section 36.0).
+#
+# Everything else in this repository checks whether the pipeline ran. This file
+# checks whether the result is worth watching. Each clause maps to a coded check
+# in `src/shorts_factory/quality/content_contract.py`; turning a clause off
+# turns its check off.
+
+hook:
+  # The first sentence has to leave the viewer wanting an answer. It may ask
+  # outright, or open on a quantity specific enough to raise the question by
+  # itself -- the benchmark Short opens "서울에서 하루 동안 사용하고 버린 물은
+  # 네 곳의 물재생센터로 모입니다", a flat statement, and it works.
+  must_create_question: true
+  # At chars_per_sec 6.2 this is the hook's character budget: 3.0s was 19
+  # characters, too few to name a subject AND a specific detail AND ask
+  # something, so the cheapest way to comply was a generic stub question --
+  # pushing directly against the concreteness rule.
+  #
+  # The benchmark Short's opening sentence is 30 characters, 4.84s at this
+  # rate, so the budget is set just above it. Tighten it in a local override if
+  # you would rather open faster; 3.0s is not a budget a concrete sentence fits
+  # in, and that is what the old value was.
+  max_seconds: 5.0
+
+script:
+  # Abstractions used where a concrete noun was available.
+  ban_generic_nouns: true
+  max_generic_nouns: 3
+  generic_nouns:
+    - 대상
+    - 장치
+    - 요소
+    - 기준값
+    - 과정
+    - 구간
+    - 시스템
+    - 부분
+    - 방식
+  # Every factual beat must be showable and say what is on screen while it plays.
+  concrete_mechanism_required: true
+  # A sentence carrying context, scale or consequence usually has no single
+  # shot, and those are the ones that make an explanation an explanation.
+  # Requiring every beat to be showable deleted six of the nine core
+  # sentences from the benchmark script. What is worth failing is a video
+  # that is mostly talk with nothing to cut to.
+  max_unshowable_ratio: 0.5
+
+  # -- structure -------------------------------------------------------------
+  # The arc is a sequence, not a set. hook -> reveal -> process -> surprise ->
+  # closing, moving forward only. Checked in quality/script_arc.py.
+  arc_order_required: true
+  # A beat is a movement, not a sentence. The reference Short is 7 paragraphs
+  # averaging 87 characters; the first real output was 20 beats averaging 17,
+  # half of which did not even finish a sentence. At that size the arc labels
+  # mean nothing and the result is a parts list.
+  min_beat_chars: 45
+  # The same output had 13 consecutive process beats. Nobody holds 13 steps.
+  max_process_beats: 5
+  # NOTE: "follow one machine rather than touring several" is a real requirement
+  # and it is NOT checked here. Subject extraction does not work in a pro-drop
+  # language, and lexical overlap does not separate good scripts from bad ones
+  # by a usable margin. See quality/script_arc.py. It lives in the writer prompt.
+
+  # -- language --------------------------------------------------------------
+  # Thresholds measured from tests/fixtures/benchmark/water_reclamation.txt.
+  # See that directory's README for the benchmark-vs-output comparison.
+  min_hangul_ratio: 0.8
+  # "나머지는 중력이 합니다" -- an English idiom calqued into Korean, and an empty
+  # light verb where the physical action belongs.
+  ban_translationese: true
+  # Deictic reference ("것들", "그 상태") is a noun the writer declined to name,
+  # so the sentence only means something while its shot is on screen. This is the
+  # check for a script that leaves the explaining to the video.
+  # Benchmark 0.16 per 100 chars; the output that prompted this scored 1.92.
+  max_deictic_per_100_chars: 0.6
+  # Something has to join one sentence to the next besides the cut.
+  # Benchmark 0.97 per 100 chars; that output scored 0.00.
+  min_causal_per_100_chars: 0.5
+  # A quantity the sources establish is what separates this machine from any
+  # machine. Never invent one: no number in the claims is a research problem.
+  min_numerals: 1
+
+scene:
+  visible_change_required: true
+  question_answered_required: true
+  # A shot that only restates narration, with nothing moving, is forbidden.
+  static_exposition_forbidden: true
+  # Scenes sharing one world rather than twelve unrelated clips.
+  shared_world_required: true
+
+video:
+  continuous_world_preferred: true
+  visual_subject_required: true
+
+final:
+  # A run using any mock provider may not produce final.mp4.
+  mock_assets_allowed: false
+  # A silent or near-silent voice track fails the render.
+  silent_audio_allowed: false

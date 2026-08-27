@@ -1,0 +1,315 @@
+"""Provider interfaces and shared plumbing (spec section 21).
+
+Domain code never touches an SDK or a URL. It talks to these protocols, so
+swapping a video or TTS vendor never reaches into the stages.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
+
+from pydantic import BaseModel, ConfigDict, Field
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+from ..config import RetrySettings
+from ..errors import ProviderError
+from ..utils import get_logger
+
+log = get_logger(__name__)
+
+
+# --------------------------------------------------------------------------
+# Result payloads
+# --------------------------------------------------------------------------
+
+
+class LLMUsage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class LLMJsonResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    data: dict[str, Any]
+    model: str
+    usage: LLMUsage = Field(default_factory=LLMUsage)
+    raw_text: str | None = None
+
+
+class SearchHit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    url: str
+    snippet: str = ""
+    publisher: str | None = None
+    published_at: str | None = None
+
+
+class ImageResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    model: str
+
+
+class VideoJobState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    #: One of: submitted, processing, completed, failed
+    state: str
+    error: str | None = None
+    progress: float | None = None
+    #: The provider refused the prompt. Retrying will not help.
+    blocked: bool = False
+
+
+class VideoResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    model: str
+    duration_sec: float | None = None
+
+
+class TTSResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    model: str
+    characters: int
+
+
+# --------------------------------------------------------------------------
+# Protocols
+# --------------------------------------------------------------------------
+
+
+@runtime_checkable
+class LLMProvider(Protocol):
+    name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
+    model: str
+
+    async def generate_json(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        schema: type[BaseModel],
+    ) -> LLMJsonResponse: ...
+
+
+@runtime_checkable
+class SearchProvider(Protocol):
+    name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
+
+    async def search(self, query: str, *, max_results: int) -> list[SearchHit]: ...
+
+
+@runtime_checkable
+class ImageProvider(Protocol):
+    name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
+    model: str
+
+    async def generate(
+        self,
+        *,
+        prompt: str,
+        width: int,
+        height: int,
+        destination: str | Path,
+        negative_prompt: str | None = None,
+        reference_image: str | Path | None = None,
+    ) -> ImageResult:
+        """One still.
+
+        ``reference_image`` asks for a picture of the thing already in that
+        image rather than a fresh invention -- the same machine, framed
+        differently. It is how a Short stops being twelve plausible machines.
+        A provider that cannot condition on an image ignores it.
+        """
+        ...
+
+
+@runtime_checkable
+class VideoProvider(Protocol):
+    name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
+    model: str
+
+    def snap_duration(self, seconds: float) -> float:
+        """Round a requested clip length to one this provider actually accepts.
+
+        Discrete clip lengths are a provider fact, not a pipeline setting, so the
+        provider owns the rule. The pipeline calls this before hashing and before
+        estimating cost, so the request, the cache key and the price all agree.
+        """
+        ...
+
+    async def submit(
+        self,
+        *,
+        prompt: str,
+        duration_sec: float,
+        aspect_ratio: str,
+        negative_prompt: str | None = None,
+        first_frame: str | Path | None = None,
+    ) -> str:
+        """Start one clip.
+
+        ``first_frame`` pins the shot to a picture that already exists instead
+        of letting the model design the machine again from the prompt. A
+        provider without image conditioning ignores it.
+        """
+        ...
+
+    async def status(self, job_id: str) -> VideoJobState: ...
+
+    async def download(self, job_id: str, destination: str | Path) -> VideoResult: ...
+
+
+@runtime_checkable
+class TTSProvider(Protocol):
+    name: str
+    #: True for stand-ins. A mock anywhere blocks a production render.
+    is_mock: bool
+    model: str
+
+    async def synthesize(self, text: str, destination: str | Path) -> TTSResult: ...
+
+
+# --------------------------------------------------------------------------
+# Shared behaviour
+# --------------------------------------------------------------------------
+
+
+#: A 429 that will still be a 429 after any amount of backing off. A spending
+#: cap or a disabled billing account is an account setting, not congestion, so
+#: retrying it four times only delays the message that says so.
+PERMANENT_429_PHRASES = (
+    "spending cap",
+    "spend cap",
+    "billing account",
+    "billing is not enabled",
+    "has been disabled",
+)
+
+
+def is_retryable_429(body: str) -> bool:
+    """Whether backing off could plausibly change a 429 into something else."""
+    lowered = body.lower()
+    return not any(phrase in lowered for phrase in PERMANENT_429_PHRASES)
+
+
+def is_retryable(exc: BaseException) -> bool:
+    return isinstance(exc, ProviderError) and exc.retryable
+
+
+async def with_retry(operation: str, func: Any, settings: RetrySettings) -> Any:
+    """Run ``func`` with exponential backoff on retryable provider errors."""
+    attempt_number = 0
+    last_error: str | None = None
+    async for attempt in AsyncRetrying(
+        stop=stop_after_attempt(settings.provider_max_attempts),
+        wait=wait_exponential(
+            multiplier=settings.provider_backoff_initial_sec,
+            max=settings.provider_backoff_max_sec,
+        ),
+        retry=retry_if_exception(is_retryable),
+        reraise=True,
+    ):
+        with attempt:
+            attempt_number += 1
+            if attempt_number > 1:
+                # Without the reason this line says a call is being repeated and
+                # not why, so four identical rate-limit failures look like four
+                # unexplained ones. tenacity clears retry_state.outcome before
+                # yielding, so the message has to be kept here.
+                log.warning(
+                    "provider_retry",
+                    operation=operation,
+                    attempt=attempt_number,
+                    reason=last_error or "unknown",
+                )
+            try:
+                return await func()
+            except Exception as exc:
+                last_error = str(exc)[:400]
+                raise
+    raise ProviderError(f"{operation} exhausted retries")  # pragma: no cover - defensive
+
+
+def assert_live_calls_allowed(provider: str) -> None:
+    """Refuse real API calls from the normal test suite (spec section 56).
+
+    ``tests/conftest.py`` sets ``SHORTS_BLOCK_LIVE_API=1``; opting back in
+    requires ``ALLOW_LIVE_API_TESTS=1`` and the ``live`` pytest marker.
+    """
+    blocked = os.environ.get("SHORTS_BLOCK_LIVE_API") == "1" or "PYTEST_CURRENT_TEST" in os.environ
+    if blocked and os.environ.get("ALLOW_LIVE_API_TESTS") != "1":
+        raise ProviderError(
+            f"live API call to '{provider}' blocked during tests; "
+            "set ALLOW_LIVE_API_TESTS=1 and run `pytest -m live` to allow it",
+            provider=provider,
+        )
+
+
+#: Other names the same secret is commonly stored under. Vendors are not
+#: consistent about this and neither is anyone's .env: fal's own docs and SDK
+#: use FAL_KEY, while most people write FAL_API_KEY because every other key in
+#: the file ends that way. Accepting both costs one dict entry and saves the
+#: user editing a file to rename something that was already correct.
+SECRET_ALIASES: dict[str, tuple[str, ...]] = {
+    "FAL_KEY": ("FAL_API_KEY", "FAL_AI_KEY"),
+    "VIDEO_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "LLM_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "IMAGE_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "SEARCH_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "TTS_API_KEY": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+}
+
+
+def secret_names(env_name: str) -> tuple[str, ...]:
+    """Every variable name that satisfies one secret, preferred name first."""
+    return (env_name, *SECRET_ALIASES.get(env_name, ()))
+
+
+def find_secret(env_name: str) -> tuple[str, str] | None:
+    """The first name that is set, and its value."""
+    for name in secret_names(env_name):
+        value = os.environ.get(name)
+        if value:
+            return name, value
+    return None
+
+
+def require_secret(env_name: str, provider: str) -> str:
+    found = find_secret(env_name)
+    if found is None:
+        accepted = " or ".join(secret_names(env_name))
+        raise ProviderError(
+            f"{provider} requires {accepted}; add one to .env (see .env.example)",
+            provider=provider,
+        )
+    name, value = found
+    if name != env_name:
+        log.debug("secret_alias_used", wanted=env_name, found=name, provider=provider)
+    return value

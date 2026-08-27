@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "title": "서로 다른 기계 세 대를 오가는 대본",
+  "hook": "계산대의 바코드는 무엇을 읽는 걸까요?",
+  "narration": "계산대의 바코드는 무엇을 읽는 걸까요? 바코드의 검은 선과 흰 선은 숫자를 담은 열쇠인 셈입니다. 공항에서는 수하물 태그를 읽어 목적지별로 분류합니다. 물류 창고의 컨베이어는 상자를 층별로 나눕니다. 도서관에서는 같은 방식으로 책의 위치를 찾습니다. 그래서 숫자 하나로 전 세계가 연결됩니다. 이것이 바코드입니다.",
+  "beats": [
+    {
+      "id": "B01",
+      "purpose": "hook",
+      "text": "계산대의 바코드는 무엇을 읽는 걸까요?",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B02",
+      "purpose": "reveal",
+      "text": "바코드의 검은 선과 흰 선은 숫자를 담은 열쇠인 셈입니다.",
+      "claim_ids": [
+        "C01"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B03",
+      "purpose": "process",
+      "text": "공항에서는 수하물 태그를 읽어 목적지별로 분류합니다.",
+      "claim_ids": [
+        "C02"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B04",
+      "purpose": "process",
+      "text": "물류 창고의 컨베이어는 상자를 층별로 나눕니다.",
+      "claim_ids": [
+        "C03"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B05",
+      "purpose": "process",
+      "text": "도서관에서는 같은 방식으로 책의 위치를 찾습니다.",
+      "claim_ids": [
+        "C04"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B06",
+      "purpose": "surprise",
+      "text": "그래서 숫자 하나로 전 세계가 연결됩니다.",
+      "claim_ids": [
+        "C05"
+      ],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    },
+    {
+      "id": "B07",
+      "purpose": "closing",
+      "text": "이것이 바코드입니다.",
+      "claim_ids": [],
+      "visualizable": true,
+      "visual_payoff": "something happens"
+    }
+  ],
+  "target_duration_sec": 58.0,
+  "resolved_question": "테스트용 질문입니다.",
+  "referenced_claim_ids": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05"
+  ],
+  "estimated_word_count": 40
+}
