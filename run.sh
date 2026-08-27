@@ -59,11 +59,38 @@ if [ -z "${SKIP_PULL:-}" ] && [ -d .git ]; then
 fi
 
 # -- 2. python --------------------------------------------------------------
-if [ ! -x .venv/bin/python ]; then
+# Two things differ on Windows, and this script assumed neither. `python3` is
+# usually absent -- the launcher is `py`, and the name `python3` is often a
+# Microsoft Store stub that answers to the name and runs nothing. And a venv
+# there is .venv/Scripts/python.exe, not .venv/bin/python, so even a venv that
+# built correctly was then looked for in a directory that does not exist.
+venv_python() {
+  for candidate in .venv/bin/python .venv/Scripts/python.exe; do
+    [ -x "$candidate" ] && { printf '%s' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+host_python() {
+  for candidate in py python3 python; do
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    # Run something, rather than trusting the name: the Store stub exists on
+    # PATH, prints a line about the Store, and cannot execute code.
+    "$candidate" -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" \
+      >/dev/null 2>&1 && { printf '%s' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+if ! PY="$(venv_python)"; then
   step "creating the virtualenv (first run only, takes a minute)"
-  python3 -m venv .venv || die "could not create .venv -- is python3 installed?"
+  HOST="$(host_python)" || die "no Python 3.12+ found. Install it:  winget install Python.Python.3.12
+      (if 'python3' opens the Microsoft Store, that is the stub, not Python)"
+  step "using $HOST"
+  "$HOST" -m venv .venv || die "could not create .venv with $HOST; the output above says why"
+  PY="$(venv_python)" || die ".venv was created but has no python in bin/ or Scripts/"
 fi
-PY=.venv/bin/python
+
 if ! $PY -c "import shorts_factory" 2>/dev/null; then
   step "installing dependencies (first run only)"
   $PY -m pip install --quiet --upgrade pip >/dev/null 2>&1

@@ -51,14 +51,22 @@ while ($i -lt $args.Count) {
 $VenvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $VenvPython)) {
     Write-Step "creating the virtualenv (first run only, takes a minute)"
+    # Run something rather than trusting the name. `python3` on a stock Windows
+    # is a Microsoft Store stub: it is on PATH, it prints a line about the
+    # Store, and it cannot execute code -- so a name check finds it and the
+    # venv then fails with a message about python3 not being installed.
     $launcher = $null
     foreach ($candidate in @("py", "python3", "python")) {
-        if (Get-Command $candidate -ErrorAction SilentlyContinue) { $launcher = $candidate; break }
+        if (-not (Get-Command $candidate -ErrorAction SilentlyContinue)) { continue }
+        & $candidate -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" 2>$null
+        if ($LASTEXITCODE -eq 0) { $launcher = $candidate; break }
     }
     if (-not $launcher) {
-        Write-Fail "no Python found. Install it with:  winget install Python.Python.3.12"
+        Write-Fail "no Python 3.12+ found. Install it:  winget install Python.Python.3.12
+      (if 'python3' opens the Microsoft Store, that is the stub, not Python)"
     }
-    if ($launcher -eq "py") { & py -3.12 -m venv .venv } else { & $launcher -m venv .venv }
+    Write-Step "using $launcher"
+    & $launcher -m venv .venv
     if (-not (Test-Path $VenvPython)) { Write-Fail "could not create .venv" }
 }
 
